@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "research"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+speechbrain = "^1.0.2"
+torchaudio = "^2.5.1"
+soundfile = "^0.12.1"
+torch = "^2.5.1"
+tqdm = "^4.67.1"
+scikit-learn = "^1.6.0"
+transformers = {extras = ["torch"], version = "^4.47.1"}
+datasets = "^3.2.0"
+jiwer = "^3.0.5"
+python-dotenv = "^1.0.1"
+huggingface-hub = "^0.27.1"
+kagglehub = "^0.3.9"
+uvicorn = "^0.34.0"
+fastapi = "^0.115.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

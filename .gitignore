@@ -1,0 +1,17 @@
+.env
+
+# Virtual environment directories
+.venv/
+env/
+venv/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+poetry.lock
