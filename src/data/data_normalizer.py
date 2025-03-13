@@ -3,7 +3,7 @@ import re
 from collections import Counter
 import os
 from typing import Optional
-from src.configurator.config import Config
+from src.data_config.config import Config
 
 class DataNormalizer:
     @staticmethod

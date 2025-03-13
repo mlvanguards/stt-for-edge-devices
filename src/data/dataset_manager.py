@@ -2,7 +2,7 @@ import kagglehub
 import shutil
 from pathlib import Path
 from typing import Optional
-from config import Config
+from src.data_config import Config
 
 class DatasetManager:
     def __init__(self, config: Config):

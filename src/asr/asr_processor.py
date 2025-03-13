@@ -3,8 +3,8 @@ import time
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
-from src.utils.audio_utils import AudioUtils
-from src.configurator.config import Config
+from src.utils.audio_handling import AudioUtils
+from src.data_config.config import Config
 
 class ASRProcessor:
     def __init__(self, config: Config):

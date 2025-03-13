@@ -1,7 +1,7 @@
 import json
 import os
 from sklearn.model_selection import train_test_split
-from src.configurator.config import Config
+from src.data_config.config import Config
 
 class DataSplitter:
     @staticmethod

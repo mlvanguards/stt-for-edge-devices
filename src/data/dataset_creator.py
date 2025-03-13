@@ -1,7 +1,7 @@
 from datasets import Dataset, DatasetDict, Audio
 import os
 import json
-from src.configurator.config import Config
+from src.data_config.config import Config
 
 class DatasetCreator:
     @staticmethod

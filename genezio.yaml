@@ -1,0 +1,29 @@
+name: stt-for-edge-devices
+region: eu-central-1
+yamlVersion: 2
+
+backend:
+  services:
+    databases:
+      - name: stt-app-db
+        region: eu-central-1
+        type: mongodb-atlas
+  path: .
+  language:
+      name: python
+      packageManager: pip
+      runtime: python3.12.x
+      requirement: requirements.txt
+  functions:
+      - name: fastapi
+        path: .
+        handler: app
+        entry: src/api/main.py
+        env:
+          HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN}
+          OPENAI_API_KEY: ${OPENAI_API_KEY}
+          ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+          MONGODB_URI: ${MONGODB_URI}
+          MONGODB_DB: "stt-app-db"
+        timeout: 30
+        type: httpServer

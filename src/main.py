@@ -1,4 +1,4 @@
-from src.configurator.config import Config
+from src.data_config.config import Config
 from src.data.dataset_manager import DatasetManager
 from src.asr.asr_processor import ASRProcessor
 from src.data.data_normalizer import DataNormalizer
