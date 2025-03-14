@@ -3,11 +3,6 @@ region: eu-central-1
 yamlVersion: 2
 
 backend:
-  services:
-    databases:
-      - name: stt-app-db
-        region: eu-central-1
-        type: mongodb-atlas
   path: .
   language:
       name: python

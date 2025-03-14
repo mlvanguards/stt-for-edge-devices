@@ -1,11 +1,12 @@
 import logging
+import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
 
 
 class MongoDB:
-    """MongoDB connection manager with serverless-friendly reconnection logic"""
+    """MongoDB connection manager with genezio-friendly connection logic"""
 
     client = None
     db = None
@@ -17,8 +18,6 @@ class MongoDB:
     async def connect(cls):
         """Connect to MongoDB and initialize collections and indexes"""
         from src.config.settings import (
-            MONGODB_URI,
-            MONGODB_DB,
             MONGODB_CONVERSATIONS_COLLECTION,
             MONGODB_MESSAGES_COLLECTION
         )
@@ -28,9 +27,17 @@ class MongoDB:
             return True
 
         try:
-            # Connect to MongoDB with connection pooling settings
+            # Get connection string from environment - use genezio's environment variable format
+            mongodb_uri = os.getenv("MONGODB_URI")
+            mongodb_db = os.getenv("MONGODB_DB", "stt-app-db")
+
+            if not mongodb_uri:
+                logger.error("No MongoDB connection string found in environment variables")
+                return False
+
+            # Connect to MongoDB with connection pooling settings optimized for serverless
             cls.client = AsyncIOMotorClient(
-                MONGODB_URI,
+                mongodb_uri,
                 serverSelectionTimeoutMS=5000,
                 connectTimeoutMS=10000,
                 maxPoolSize=10,
@@ -42,7 +49,8 @@ class MongoDB:
             # Test the connection
             await cls.client.admin.command('ping')
 
-            cls.db = cls.client[MONGODB_DB]
+            # Use the database name from environment or fallback
+            cls.db = cls.client[mongodb_db]
             cls.conversations_collection = cls.db[MONGODB_CONVERSATIONS_COLLECTION]
             cls.messages_collection = cls.db[MONGODB_MESSAGES_COLLECTION]
 
@@ -52,7 +60,7 @@ class MongoDB:
             await cls.messages_collection.create_index([("conversation_id", 1), ("timestamp", 1)])
 
             cls._initialized = True
-            logger.info(f"Connected to MongoDB database: {MONGODB_DB}")
+            logger.info(f"Connected to MongoDB database: {mongodb_db}")
             return True
         except Exception as e:
             cls._initialized = False
@@ -76,7 +84,17 @@ class MongoDB:
         """Ensure we have a valid connection, reconnecting if necessary"""
         if not cls._initialized or cls.client is None or cls.db is None:
             await cls.connect()
-        return cls._initialized
+
+        # Additional check for valid connection
+        if cls._initialized and cls.client is not None and cls.db is not None:
+            try:
+                # Test the connection with a simple command
+                await cls.client.admin.command('ping')
+                return True
+            except Exception as e:
+                logger.error(f"Connection test failed: {str(e)}")
+                cls._initialized = False
+                await cls.connect()  # Try to reconnect
 
     @classmethod
     async def get_conversation(cls, conversation_id):

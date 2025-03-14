@@ -71,15 +71,37 @@ async def general_exception_handler(request, exc):
     )
 
 
-# Startup and shutdown events
+# Updated startup event for src/api/main.py
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application on startup"""
     logging.info("Starting application initialization...")
 
-    # Start MongoDB connection in background to not block startup
-    import asyncio
-    asyncio.create_task(MongoDB.connect())
+    try:
+        # Load MongoDB connection settings
+        from src.config.settings import MONGODB_URI, MONGODB_DB
+        logging.info(f"Using database: {MONGODB_DB}")
+
+        # Print environment variables (masked) for debugging
+        import os
+        import re
+
+        uri = os.getenv("MONGODB_URI")
+        if uri:
+            masked_uri = re.sub(r'mongodb(\+srv)?://[^:]+:[^@]+@', 'mongodb\\1://***:***@', uri)
+            logging.info(f"Found MONGODB_URI: {masked_uri}")
+
+        # Initialize MongoDB connection
+        from src.core.database import MongoDB
+        connected = await MongoDB.connect()
+
+        if connected:
+            logging.info(f"Successfully connected to MongoDB database: {MONGODB_DB}")
+        else:
+            logging.error("Failed to connect to MongoDB database")
+    except Exception as e:
+        logging.error(f"Error during startup: {str(e)}")
 
     logging.info(f"{API_TITLE} v{API_VERSION} started successfully")
 
@@ -108,4 +130,3 @@ async def shutdown_event():
     # Close MongoDB connection
     await MongoDB.close()
     logging.info("Application shutdown complete")
-

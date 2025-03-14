@@ -27,6 +27,7 @@ pymongo = {extras = ["srv"], version = "^4.11.2"}
 motor = "^3.7.0"
 ffmpeg = "^1.4"
 pydub = "^0.25.1"
+gitingest = "^0.1.4"
 
 
 [build-system]

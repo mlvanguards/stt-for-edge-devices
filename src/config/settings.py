@@ -32,7 +32,7 @@ DEFAULT_VOICE_ID = "cgSgspJ2msm6clMCkdW9"
 
 # MongoDB configuration
 MONGODB_URI = os.getenv("MONGODB_URI")
-MONGODB_DB = os.getenv("MONGODB_DB", "stt_app_db")
+MONGODB_DB = os.getenv("MONGODB_DB", "stt-app-db")
 MONGODB_CONVERSATIONS_COLLECTION = "conversations"
 MONGODB_MESSAGES_COLLECTION = "messages"
 
