@@ -1,6 +1,6 @@
-import json
 import uuid
 import logging
+from typing import Optional
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status
 
 from src.core.database import MongoDB
@@ -21,16 +21,17 @@ logger = logging.getLogger(__name__)
 @router.post("/chat", response_model=ChatResponse)
 async def process_audio(
         file: UploadFile = File(...),
-        request_data: str = Form(...),
+        conversation_id: Optional[str] = Form(None),
+        voice_id: Optional[str] = Form(None),
         force_split: bool = Form(False)
 ):
     """
-    Process an audio file with resilient error handling and retries.
     Maintains conversation context between requests.
     Converts the response to speech using ElevenLabs.
 
     - **file**: Audio file to transcribe
-    - **request_data**: JSON string containing conversation_id and/or system_prompt and/or voice_id
+    - **conversation_id**: Optional conversation ID to continue an existing conversation
+    - **voice_id**: Optional voice ID for text-to-speech (defaults to system default)
     - **force_split**: Boolean flag (not used in direct processing)
     """
     # Validate the uploaded file type
@@ -41,38 +42,30 @@ async def process_audio(
         )
 
     try:
-        # Parse the request data
-        try:
-            data = json.loads(request_data)
-            conversation_id = data.get("conversation_id")
-            system_prompt = data.get("system_prompt")
-            voice_id = data.get("voice_id", DEFAULT_VOICE_ID)
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid JSON in request_data"
-            )
+        # Use parameters directly
+        _conversation_id = conversation_id
+        _voice_id = voice_id if voice_id is not None else DEFAULT_VOICE_ID
 
         # Handle conversation context
-        if conversation_id:
+        if _conversation_id:
             # Use existing conversation
-            conversation = await MongoDB.get_conversation(conversation_id)
+            conversation = await MongoDB.get_conversation(_conversation_id)
             if not conversation:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Conversation {conversation_id} not found"
+                    detail=f"Conversation {_conversation_id} not found"
                 )
 
-            system_prompt = conversation["system_prompt"]
-            voice_id = conversation.get("voice_id", DEFAULT_VOICE_ID)
+            _system_prompt = conversation["system_prompt"]
+            _voice_id = conversation.get("voice_id", DEFAULT_VOICE_ID)
 
             # Get conversation messages
-            messages = await MongoDB.get_conversation_messages(conversation_id)
+            messages = await MongoDB.get_conversation_messages(_conversation_id)
 
             # Format messages for GPT
             chat_history = [{
                 "role": "system",
-                "content": system_prompt
+                "content": _system_prompt
             }]
 
             # Add conversation history (excluding system messages)
@@ -84,16 +77,16 @@ async def process_audio(
                     })
         else:
             # Create a new conversation
-            conversation_id = str(uuid.uuid4())
-            system_prompt = system_prompt if system_prompt else DEFAULT_SYSTEM_PROMPT
+            _conversation_id = str(uuid.uuid4())
+            _system_prompt = DEFAULT_SYSTEM_PROMPT
 
             # Create a new conversation in the database
-            await MongoDB.create_conversation(conversation_id, system_prompt, voice_id)
+            await MongoDB.create_conversation(_conversation_id, _system_prompt, _voice_id)
 
             # Initialize chat history with system message
             chat_history = [{
                 "role": "system",
-                "content": system_prompt
+                "content": _system_prompt
             }]
 
         # Read the audio content into memory
@@ -122,13 +115,13 @@ async def process_audio(
         gpt_message = gpt_result["message"]
 
         # Update conversation history in database
-        await MongoDB.add_message(conversation_id, "user", clean_text)
-        await MongoDB.add_message(conversation_id, "assistant", gpt_message)
+        await MongoDB.add_message(_conversation_id, "user", clean_text)
+        await MongoDB.add_message(_conversation_id, "assistant", gpt_message)
 
         # Generate TTS audio from the GPT response
         tts_audio_base64 = None
         try:
-            success, _, tts_audio_base64 = synthesize_speech(gpt_message, voice_id)
+            success, _, tts_audio_base64 = synthesize_speech(gpt_message, _voice_id)
             if not success:
                 logger.warning(f"Failed to generate TTS audio: {_}")
         except Exception as tts_error:
@@ -136,7 +129,7 @@ async def process_audio(
             # Continue without TTS if it fails
 
         # Get updated conversation history for response
-        messages = await MongoDB.get_conversation_messages(conversation_id)
+        messages = await MongoDB.get_conversation_messages(_conversation_id)
         formatted_messages = []
         for message in messages:
             if message["role"] != "system":  # Skip system messages
@@ -147,7 +140,7 @@ async def process_audio(
 
         # Build the response
         result = {
-            "conversation_id": conversation_id,
+            "conversation_id": _conversation_id,
             "transcription": clean_text,
             "raw_transcription": full_transcription,
             "segment_transcriptions": sorted_transcriptions,
