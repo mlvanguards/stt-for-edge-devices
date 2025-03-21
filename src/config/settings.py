@@ -6,10 +6,10 @@ load_dotenv()
 
 # API information
 API_VERSION = "1.0.0"
-API_TITLE = "STT and Chat API with Conversation Continuity, TTS, and MongoDB"
+API_TITLE = "STT and Chat API with Conversation Memory, TTS, and MongoDB"
 API_DESCRIPTION = """
-Speech-to-text transcription, conversation management with GPT models, 
-and text-to-speech synthesis API.
+Speech-to-text transcription, conversation management with GPT models and short-term memory, 
+and text-to-speech synthesis API optimized for edge devices.
 """
 
 # API Configurations
@@ -25,6 +25,12 @@ GPT_MODEL = "gpt-4o"
 GPT_TEMPERATURE = 0.7
 GPT_MAX_TOKENS = 500
 
+# Memory settings
+MEMORY_ENABLED = os.getenv("MEMORY_ENABLED", "true").lower() == "true"
+MEMORY_MAX_MESSAGES = int(os.getenv("MEMORY_MAX_MESSAGES", "15"))
+MEMORY_SUMMARIZE_THRESHOLD = int(os.getenv("MEMORY_SUMMARIZE_THRESHOLD", "5"))
+
+
 # ElevenLabs configuration
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech"
@@ -35,6 +41,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_DB = os.getenv("MONGODB_DB", "stt-app-db")
 MONGODB_CONVERSATIONS_COLLECTION = "conversations"
 MONGODB_MESSAGES_COLLECTION = "messages"
+MONGODB_MEMORY_COLLECTION = "memory_summaries"
 
 # Audio processing configuration
 AUDIO_SEGMENT_DURATION = 10  # seconds
@@ -57,6 +64,7 @@ TTS_DEFAULT_SETTINGS = {
 DEFAULT_SYSTEM_PROMPT = """
 You are a teacher having casual conversation with kids below the age of 12. 
 Do not try to correct their typos just keep the conversation going with them.
+Use your memory of previous conversations to make the interaction more natural.
 """
 
 # CORS settings

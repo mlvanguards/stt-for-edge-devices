@@ -1,7 +1,8 @@
 import uuid
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status
+from datetime import datetime
 
 from src.core.database import MongoDB
 from src.core.speech.recognition import process_audio_file, clean_transcription
@@ -18,6 +19,37 @@ router = APIRouter(tags=["chat"])
 logger = logging.getLogger(__name__)
 
 
+async def extract_conversation_context(conversation_id: str) -> List[Dict]:
+    """
+    Extract conversation context with simple message structure
+    """
+    # Get conversation details
+    conversation = await MongoDB.get_conversation(conversation_id)
+    if not conversation:
+        return []
+
+    # Get messages
+    messages = await MongoDB.get_conversation_messages(conversation_id)
+
+    # Format messages for GPT - keep it simple with just role and content
+    system_prompt = conversation["system_prompt"]
+
+    chat_history = [{
+        "role": "system",
+        "content": system_prompt
+    }]
+
+    # Add conversation history (no timestamps or extra metadata)
+    for message in messages:
+        if message["role"] != "system":
+            chat_history.append({
+                "role": message["role"],
+                "content": message["content"]
+            })
+
+    return chat_history
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def process_audio(
         file: UploadFile = File(...),
@@ -26,7 +58,7 @@ async def process_audio(
         force_split: bool = Form(False)
 ):
     """
-    Maintains conversation context between requests.
+    Maintains conversation context between requests with enhanced memory.
     Converts the response to speech using ElevenLabs.
 
     - **file**: Audio file to transcribe
@@ -59,22 +91,8 @@ async def process_audio(
             _system_prompt = conversation["system_prompt"]
             _voice_id = conversation.get("voice_id", DEFAULT_VOICE_ID)
 
-            # Get conversation messages
-            messages = await MongoDB.get_conversation_messages(_conversation_id)
-
-            # Format messages for GPT
-            chat_history = [{
-                "role": "system",
-                "content": _system_prompt
-            }]
-
-            # Add conversation history (excluding system messages)
-            for message in messages:
-                if message["role"] != "system":
-                    chat_history.append({
-                        "role": message["role"],
-                        "content": message["content"]
-                    })
+            # Get conversation context
+            chat_history = await extract_conversation_context(_conversation_id)
         else:
             # Create a new conversation
             _conversation_id = str(uuid.uuid4())
@@ -83,7 +101,7 @@ async def process_audio(
             # Create a new conversation in the database
             await MongoDB.create_conversation(_conversation_id, _system_prompt, _voice_id)
 
-            # Initialize chat history with system message
+            # Initialize chat history with system message - no timestamp needed for LLM
             chat_history = [{
                 "role": "system",
                 "content": _system_prompt
@@ -92,8 +110,7 @@ async def process_audio(
         # Read the audio content into memory
         audio_content = await file.read()
 
-        # Process the audio file directly without pydub/ffmpeg
-        # This sends the audio directly to HuggingFace
+        # Process the audio file
         transcriptions = process_audio_file(audio_content, file.content_type, force_split)
 
         # Clean up the transcription
@@ -103,7 +120,7 @@ async def process_audio(
         sorted_transcriptions = sorted(transcriptions, key=lambda x: x.get("index", 0))
         full_transcription = " ".join([t.get("text", "") for t in sorted_transcriptions])
 
-        # Get response from GPT
+        # Get response from GPT with memory optimization
         gpt_result = get_chat_completion(clean_text, chat_history)
 
         if not gpt_result["success"]:
@@ -114,9 +131,10 @@ async def process_audio(
 
         gpt_message = gpt_result["message"]
 
-        # Update conversation history in database
-        await MongoDB.add_message(_conversation_id, "user", clean_text)
-        await MongoDB.add_message(_conversation_id, "assistant", gpt_message)
+        # Update conversation history in database - use string timestamps
+        current_time = datetime.utcnow().isoformat()
+        await MongoDB.add_message(_conversation_id, "user", clean_text, timestamp=current_time)
+        await MongoDB.add_message(_conversation_id, "assistant", gpt_message, timestamp=datetime.utcnow().isoformat())
 
         # Generate TTS audio from the GPT response
         tts_audio_base64 = None
@@ -138,7 +156,7 @@ async def process_audio(
                     "content": message["content"]
                 })
 
-        # Build the response
+        # Build the response with memory info if available
         result = {
             "conversation_id": _conversation_id,
             "transcription": clean_text,
@@ -148,7 +166,11 @@ async def process_audio(
             "response": gpt_message,
             "model": gpt_result["model"],
             "usage": gpt_result.get("usage", {}),
-            "conversation_history": formatted_messages
+            "conversation_history": formatted_messages,
+            "memory_stats": {
+                "original_history_size": gpt_result.get("original_history_length", 0),
+                "optimized_history_size": gpt_result.get("optimized_history_length", 0)
+            }
         }
 
         # Add TTS data if available
