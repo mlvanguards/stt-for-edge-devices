@@ -12,7 +12,9 @@ from src.models.conversation import ChatResponse
 from src.config.settings import (
     DEFAULT_VOICE_ID,
     DEFAULT_SYSTEM_PROMPT,
-    ALLOWED_AUDIO_CONTENT_TYPES
+    ALLOWED_AUDIO_CONTENT_TYPES,
+    AVAILABLE_STT_MODELS,
+    DEFAULT_STT_MODEL_ID
 )
 
 router = APIRouter(tags=["chat"])
@@ -55,6 +57,7 @@ async def process_audio(
         file: UploadFile = File(...),
         conversation_id: Optional[str] = Form(None),
         voice_id: Optional[str] = Form(None),
+        model_id: Optional[str] = Form(None),
         force_split: bool = Form(False)
 ):
     """
@@ -64,6 +67,7 @@ async def process_audio(
     - **file**: Audio file to transcribe
     - **conversation_id**: Optional conversation ID to continue an existing conversation
     - **voice_id**: Optional voice ID for text-to-speech (defaults to system default)
+    - **model_id**: Optional model ID for speech recognition (defaults to system default)
     - **force_split**: Boolean flag (not used in direct processing)
     """
     # Validate the uploaded file type
@@ -73,10 +77,19 @@ async def process_audio(
             detail=f"Invalid file type: {file.content_type}"
         )
 
+    # Validate model_id if provided
+    if model_id and model_id not in [model["id"] for model in AVAILABLE_STT_MODELS]:
+        valid_models = [model["id"] for model in AVAILABLE_STT_MODELS]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid model ID: {model_id}. Valid options: {valid_models}"
+        )
+
     try:
         # Use parameters directly
         _conversation_id = conversation_id
         _voice_id = voice_id if voice_id is not None else DEFAULT_VOICE_ID
+        _model_id = model_id  # Can be None - the process_audio_file function will use the default
 
         # Handle conversation context
         if _conversation_id:
@@ -91,6 +104,10 @@ async def process_audio(
             _system_prompt = conversation["system_prompt"]
             _voice_id = conversation.get("voice_id", DEFAULT_VOICE_ID)
 
+            # If no model_id was specified in request, use the one from conversation if available
+            if not _model_id and "stt_model_id" in conversation:
+                _model_id = conversation["stt_model_id"]
+
             # Get conversation context
             chat_history = await extract_conversation_context(_conversation_id)
         else:
@@ -99,7 +116,12 @@ async def process_audio(
             _system_prompt = DEFAULT_SYSTEM_PROMPT
 
             # Create a new conversation in the database
-            await MongoDB.create_conversation(_conversation_id, _system_prompt, _voice_id)
+            await MongoDB.create_conversation(
+                _conversation_id,
+                _system_prompt,
+                _voice_id,
+                _model_id
+            )
 
             # Initialize chat history with system message - no timestamp needed for LLM
             chat_history = [{
@@ -110,8 +132,13 @@ async def process_audio(
         # Read the audio content into memory
         audio_content = await file.read()
 
-        # Process the audio file
-        transcriptions = process_audio_file(audio_content, file.content_type, force_split)
+        # Process the audio file with the selected model - either from request, conversation, or default
+        transcriptions = process_audio_file(
+            audio_content,
+            file.content_type,
+            model_id=_model_id,
+            force_split=force_split
+        )
 
         # Clean up the transcription
         clean_text = clean_transcription(transcriptions)
@@ -156,7 +183,9 @@ async def process_audio(
                     "content": message["content"]
                 })
 
-        # Build the response with memory info if available
+        model_used = _model_id if _model_id else DEFAULT_STT_MODEL_ID
+
+        # Build the response with all relevant information
         result = {
             "conversation_id": _conversation_id,
             "transcription": clean_text,
@@ -165,6 +194,7 @@ async def process_audio(
             "num_segments": len(sorted_transcriptions),
             "response": gpt_message,
             "model": gpt_result["model"],
+            "stt_model_used": model_used,  # Always include which model was actually used
             "usage": gpt_result.get("usage", {}),
             "conversation_history": formatted_messages,
             "memory_stats": {
@@ -187,4 +217,22 @@ async def process_audio(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing audio: {str(e)}"
+        )
+
+
+@router.get("/available_stt_models")
+async def available_stt_models():
+    """
+    Get a list of available speech-to-text models
+    """
+    try:
+        return {
+            "models": AVAILABLE_STT_MODELS,
+            "default_model": DEFAULT_STT_MODEL_ID
+        }
+    except Exception as e:
+        logger.error(f"Error fetching available models: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching models: {str(e)}"
         )

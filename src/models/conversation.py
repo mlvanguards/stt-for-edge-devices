@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
-from src.config.settings import DEFAULT_VOICE_ID, DEFAULT_SYSTEM_PROMPT
+from src.config.settings import DEFAULT_VOICE_ID, DEFAULT_SYSTEM_PROMPT, DEFAULT_STT_MODEL_ID
 from src.models.common import MongoBaseModel
 
 class MessageModel(MongoBaseModel):
@@ -17,6 +17,7 @@ class ConversationModel(MongoBaseModel):
     conversation_id: str
     system_prompt: str
     voice_id: str = DEFAULT_VOICE_ID
+    stt_model_id: str = DEFAULT_STT_MODEL_ID
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_updated: datetime = Field(default_factory=datetime.utcnow)
 
@@ -26,6 +27,7 @@ class ConversationCreate(BaseModel):
     """Request model for creating a conversation"""
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     voice_id: Optional[str] = DEFAULT_VOICE_ID
+    stt_model_id: Optional[str] = DEFAULT_STT_MODEL_ID
 
 
 class ProcessAudioRequest(BaseModel):
@@ -33,6 +35,7 @@ class ProcessAudioRequest(BaseModel):
     conversation_id: Optional[str] = None
     system_prompt: Optional[str] = None
     voice_id: Optional[str] = DEFAULT_VOICE_ID
+    stt_model_id: Optional[str] = DEFAULT_STT_MODEL_ID
 
 
 # API Response Models
@@ -41,6 +44,7 @@ class ConversationResponse(BaseModel):
     conversation_id: str
     system_prompt: str
     voice_id: str
+    stt_model_id: Optional[str] = DEFAULT_STT_MODEL_ID
     messages: List[Dict[str, Any]] = []
 
 
@@ -62,6 +66,7 @@ class ChatResponse(BaseModel):
     num_segments: int
     response: str
     model: str
+    stt_model_used: Optional[str] = DEFAULT_STT_MODEL_ID
     usage: Dict[str, Any] = {}
     conversation_history: List[Dict[str, Any]] = []
     tts_audio_base64: Optional[str] = None

@@ -15,8 +15,33 @@ and text-to-speech synthesis API optimized for edge devices.
 # API Configurations
 # Hugging Face API configuration
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-HUGGINGFACE_MODEL_ID = "StefanStefan/Wav2Vec-100-CSR"
-HUGGINGFACE_API_URL = f"https://api-inference.huggingface.co/models/{HUGGINGFACE_MODEL_ID}"
+# Available STT Models
+AVAILABLE_STT_MODELS = [
+    {
+        "id": "StefanStefan/Wav2Vec-100-CSR",
+        "name": "Wav2Vec-100-CSR (Default)",
+        "description": "Standard model with good accuracy"
+    },
+    {
+        "id": "StefanStefan/Wav2Vec-100-CSR-Quantized",
+        "name": "Wav2Vec-100-CSR-Quantized",
+        "description": "Quantized model for faster inference with slight accuracy trade-off"
+    },
+    {
+        "id": "StefanStefan/Wav2Vec-100-CSR-KD",
+        "name": "Wav2Vec-100-CSR-KD",
+        "description": "Knowledge distilled model with improved efficiency"
+    },
+    {
+        "id": "StefanStefan/Wav2Vec-100-CSR-Distilled-Quantized",
+        "name": "Wav2Vec-100-CSR-Distilled-Quantized",
+        "description": "Distilled and quantized model for maximum efficiency"
+    }
+]
+
+# Default STT model ID (used when no model is specified)
+DEFAULT_STT_MODEL_ID = "StefanStefan/Wav2Vec-100-CSR"
+HUGGINGFACE_API_URL = f"https://api-inference.huggingface.co/models"
 
 # OpenAI/GPT configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")

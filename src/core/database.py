@@ -164,8 +164,10 @@ class MongoDB:
         return message
 
     @classmethod
-    async def create_conversation(cls, conversation_id, system_prompt, voice_id):
+    async def create_conversation(cls, conversation_id, system_prompt, voice_id, stt_model_id=None):
         """Create a new conversation with string timestamps"""
+        from src.config.settings import DEFAULT_STT_MODEL_ID
+
         now = datetime.utcnow().isoformat()
         await cls.ensure_connection()
 
@@ -174,6 +176,7 @@ class MongoDB:
             "conversation_id": conversation_id,
             "system_prompt": system_prompt,
             "voice_id": voice_id,
+            "stt_model_id": stt_model_id or DEFAULT_STT_MODEL_ID,
             "created_at": now,
             "last_updated": now,
             "message_count": 0,

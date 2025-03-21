@@ -28,6 +28,7 @@ motor = "^3.7.0"
 ffmpeg = "^1.4"
 pydub = "^0.25.1"
 gitingest = "^0.1.4"
+prettytable = "^3.15.1"
 
 
 [build-system]

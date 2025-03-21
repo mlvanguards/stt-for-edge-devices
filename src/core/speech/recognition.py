@@ -6,6 +6,7 @@ import re
 from src.config.settings import (
     HUGGINGFACE_TOKEN,
     HUGGINGFACE_API_URL,
+    DEFAULT_STT_MODEL_ID,
     SPEECH_RECOGNITION_RETRIES,
     SPEECH_RECOGNITION_BACKOFF_FACTOR
 )
@@ -13,7 +14,7 @@ from src.config.settings import (
 logger = logging.getLogger(__name__)
 
 
-def process_audio_file(audio_content, content_type, force_split=False):
+def process_audio_file(audio_content, content_type, model_id=None, force_split=False):
     """
     Process an audio file by sending it directly to HuggingFace API.
     No preprocessing or ffmpeg/pydub dependencies.
@@ -21,13 +22,20 @@ def process_audio_file(audio_content, content_type, force_split=False):
     Args:
         audio_content: Raw audio bytes
         content_type: MIME type of the audio
+        model_id: Optional model ID to use for transcription (defaults to DEFAULT_STT_MODEL_ID)
         force_split: Ignored parameter (kept for API compatibility)
 
     Returns:
         List of transcription segments (typically just one)
     """
     try:
-        logger.info(f"Processing audio directly via HuggingFace (content type: {content_type})")
+        # Always use a valid model ID - fall back to the default if none provided
+        selected_model = model_id if model_id else DEFAULT_STT_MODEL_ID
+
+        # Construct the full API URL with the selected model
+        api_url = f"{HUGGINGFACE_API_URL}/{selected_model}"
+
+        logger.info(f"Processing audio with model {selected_model} (content type: {content_type})")
 
         headers = {
             "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
@@ -37,7 +45,7 @@ def process_audio_file(audio_content, content_type, force_split=False):
         # Try multiple times with exponential backoff
         for attempt in range(SPEECH_RECOGNITION_RETRIES):
             try:
-                response = requests.post(HUGGINGFACE_API_URL, headers=headers, data=audio_content)
+                response = requests.post(api_url, headers=headers, data=audio_content)
 
                 if response.status_code == 200:
                     transcription_result = response.json()
@@ -85,7 +93,6 @@ def process_audio_file(audio_content, content_type, force_split=False):
     except Exception as e:
         logger.error(f"Unexpected error in audio processing: {str(e)}")
         return [{"index": 0, "text": "Error processing audio file."}]
-
 
 def clean_transcription(transcriptions):
     """
