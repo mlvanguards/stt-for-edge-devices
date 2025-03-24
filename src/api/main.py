@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,6 +15,7 @@ from src.config.settings import (
 )
 from src.core.database import MongoDB
 from src.api.routes import router as api_router
+from src.core.speech.recognition import warm_up_inference_api
 
 # Configure logging
 logging.basicConfig(
@@ -71,8 +73,6 @@ async def general_exception_handler(request, exc):
     )
 
 
-# Updated startup event for src/api/main.py
-
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application on startup"""
@@ -100,33 +100,12 @@ async def startup_event():
             logging.info(f"Successfully connected to MongoDB database: {MONGODB_DB}")
         else:
             logging.error("Failed to connect to MongoDB database")
+
+        # Start warm-up process in the background to not block startup
+        asyncio.create_task(warm_up_inference_api())
+        logging.info("Hugging Face API warm-up initiated")
+
     except Exception as e:
         logging.error(f"Error during startup: {str(e)}")
 
     logging.info(f"{API_TITLE} v{API_VERSION} started successfully")
-
-@app.get("/create-test-conversation")
-async def create_test_conversation():
-    """Create a test conversation to initialize the database"""
-    try:
-        conversation_id = str(uuid.uuid4())
-        await MongoDB.create_conversation(
-            conversation_id,
-            "This is a test conversation",
-            "default-voice-id"
-        )
-        await MongoDB.add_message(
-            conversation_id,
-            "user",
-            "This is a test message"
-        )
-        return {"status": "success", "conversation_id": conversation_id}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up resources on shutdown"""
-    # Close MongoDB connection
-    await MongoDB.close()
-    logging.info("Application shutdown complete")

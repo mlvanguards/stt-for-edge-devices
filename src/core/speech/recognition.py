@@ -2,6 +2,7 @@ import time
 import logging
 import requests
 import re
+import asyncio
 
 from src.config.settings import (
     HUGGINGFACE_TOKEN,
@@ -45,44 +46,101 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
         # Try multiple times with exponential backoff
         for attempt in range(SPEECH_RECOGNITION_RETRIES):
             try:
-                response = requests.post(api_url, headers=headers, data=audio_content)
+                logger.info(f"Attempt {attempt + 1}/{SPEECH_RECOGNITION_RETRIES}")
+
+                # Use a longer timeout for the first attempt (model loading)
+                timeout = 30.0 if attempt == 0 else 15.0
+
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    data=audio_content,
+                    timeout=timeout  # Add explicit timeout
+                )
 
                 if response.status_code == 200:
-                    transcription_result = response.json()
+                    try:
+                        transcription_result = response.json()
+                    except ValueError:
+                        # Not JSON, treat as plain text
+                        transcription_result = {"text": response.text}
 
                     # Extract the text from the transcription
                     if isinstance(transcription_result, dict) and "text" in transcription_result:
                         text = transcription_result["text"]
-                        if text and "[Failed to transcribe" not in text:
-                            return [{"index": 0, "text": text}]
                     else:
                         text = str(transcription_result)
-                        if text and "[Failed to transcribe" not in text:
-                            return [{"index": 0, "text": text}]
+
+                    # Check for failure markers in the text
+                    failure_markers = [
+                        "Failed to transcribe",
+                        "Error processing audio",
+                        "failed to transcribe"
+                    ]
+
+                    if text and not any(marker in text for marker in failure_markers):
+                        return [{"index": 0, "text": text}]
+                    else:
+                        logger.warning(f"API returned success but with failure message: {text}")
+                        # This is likely a loading issue, so wait longer and retry
+                        wait_time = max(3, (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
+                        logger.info(f"Waiting {wait_time}s before retrying...")
+                        time.sleep(wait_time)
+                        continue
 
                 elif response.status_code == 503:
-                    # Service unavailable, wait and retry
-                    wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt)
-                    logger.warning(f"API returned 503, retrying in {wait_time} seconds...")
+                    # Service unavailable, likely model loading
+                    wait_time = max(5, (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
+                    logger.warning(f"API returned 503, model likely loading. Retry in {wait_time}s...")
                     time.sleep(wait_time)
                     continue
+
+                elif response.status_code in [400, 401, 403]:
+                    # Authentication or format issues
+                    logger.error(f"API returned {response.status_code}: {response.text}")
+
+                    # If first attempt, retry anyway - sometimes this happens on cold start
+                    if attempt == 0:
+                        logger.info("First attempt returned error - retrying anyway...")
+                        time.sleep(3)
+                        continue
+                    elif attempt < SPEECH_RECOGNITION_RETRIES - 1:
+                        time.sleep(2)
+                        continue
+                    else:
+                        # Last attempt failed
+                        return [{"index": 0, "text": f"Failed to transcribe audio: API error {response.status_code}"}]
                 else:
                     # Other error
                     logger.error(f"API error: {response.status_code} - {response.text}")
 
                     if attempt < SPEECH_RECOGNITION_RETRIES - 1:
-                        # Try again
-                        time.sleep(1)
+                        # Wait longer before retrying
+                        wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 1.5 + 1
+                        logger.info(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
                     else:
                         # Last attempt failed
                         return [{"index": 0, "text": f"Failed to transcribe audio: API error {response.status_code}"}]
+
+            except requests.exceptions.Timeout:
+                logger.warning(f"Request timeout on attempt {attempt + 1}")
+                # For timeouts, use longer delays
+                wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2 + 3
+                if attempt < SPEECH_RECOGNITION_RETRIES - 1:
+                    logger.info(f"Retrying in {wait_time} seconds after timeout...")
+                    time.sleep(wait_time)
+                else:
+                    return [{"index": 0, "text": "Transcription timed out"}]
 
             except Exception as e:
                 logger.error(f"Error in processing attempt {attempt + 1}: {str(e)}")
 
                 if attempt < SPEECH_RECOGNITION_RETRIES - 1:
-                    # Try again
-                    time.sleep(1)
+                    # Try again with increased delay
+                    wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) + 2
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
                 else:
                     # Last attempt failed
                     return [{"index": 0, "text": f"Error processing audio: {str(e)}"}]
@@ -93,6 +151,7 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
     except Exception as e:
         logger.error(f"Unexpected error in audio processing: {str(e)}")
         return [{"index": 0, "text": "Error processing audio file."}]
+
 
 def clean_transcription(transcriptions):
     """
@@ -115,3 +174,52 @@ def clean_transcription(transcriptions):
         clean_text = "Unable to transcribe audio clearly. Please try again with a clearer recording."
 
     return clean_text
+
+
+async def warm_up_inference_api():
+    """
+    Send a small dummy request to the Hugging Face API to trigger model loading.
+    This helps prevent the first real request from failing.
+    """
+    try:
+        logger.info(f"Warming up Hugging Face Inference API for model: {DEFAULT_STT_MODEL_ID}")
+
+        # Generate a tiny audio file (0.5 seconds of silence)
+        import numpy as np
+        from io import BytesIO
+        import wave
+
+        sample_rate = 16000
+        duration = 0.5
+        samples = np.zeros(int(sample_rate * duration), dtype=np.int16)
+
+        buffer = BytesIO()
+        with wave.open(buffer, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(samples.tobytes())
+
+        audio_content = buffer.getvalue()
+
+        # Send warm-up request
+        api_url = f"{HUGGINGFACE_API_URL}/{DEFAULT_STT_MODEL_ID}"
+        headers = {
+            "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
+            "Content-Type": "audio/wav",
+        }
+
+        logger.info("Sending warm-up request to Hugging Face API")
+        try:
+            response = requests.post(api_url, headers=headers, data=audio_content, timeout=45.0)
+            logger.info(f"Warm-up request completed with status {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Warm-up request failed: {str(e)}")
+
+        # Wait a moment for model to initialize fully
+        logger.info("Waiting for model to initialize...")
+        await asyncio.sleep(2)
+        logger.info("Warm-up complete")
+
+    except Exception as e:
+        logger.warning(f"Failed to warm up inference API: {str(e)}")
