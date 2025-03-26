@@ -5,7 +5,6 @@ import requests
 from src.config.settings import (
     OPENAI_API_KEY,
     OPENAI_API_URL,
-    GPT_MODEL,
     MEMORY_MAX_MESSAGES,
     MEMORY_SUMMARIZE_THRESHOLD
 )
@@ -48,7 +47,6 @@ class ConversationMemory:
         if len(conversation) <= self.max_messages:
             return system_messages + conversation
 
-        # We need to optimize - split conversation into recent and older parts
         split_point = max(0,
                           len(conversation) - MEMORY_MAX_MESSAGES + 2)  # Keep n-2 recent messages (leave room for summary)
         older_messages = conversation[:split_point]
@@ -107,7 +105,7 @@ class ConversationMemory:
             }
 
             data = {
-                "model": "gpt-3.5-turbo",  # Use a smaller model for summarization
+                "model": "gpt-4o",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant that summarizes conversations."},
                     {"role": "user", "content": summarization_prompt}

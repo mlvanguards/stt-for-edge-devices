@@ -1,8 +1,7 @@
-import kagglehub
 import shutil
 from pathlib import Path
 from typing import Optional
-from src.data_config import Config
+from src.data_config.config import Config
 
 class DatasetManager:
     def __init__(self, config: Config):
@@ -12,7 +11,6 @@ class DatasetManager:
 
     def download_dataset(self) -> Path:
         """
-        Download the Kaggle dataset and ensure the audio files are in the proper output directory.
         If the dataset ( the output subdirectory with audio files) already exists, skip the download.
         """
         try:
@@ -70,3 +68,9 @@ class DatasetManager:
         # Check if at least one audio file exists in the extracted path.
         audio_files = list(self.extracted_path.rglob('*'))
         return any(file.suffix.lower() in self.config.dataset['audio_extensions'] for file in audio_files)
+
+import kagglehub
+
+path = kagglehub.dataset_download("mirfan899/kids-speech-dataset")
+
+print("Path to dataset files:", path)

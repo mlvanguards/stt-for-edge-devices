@@ -3,7 +3,7 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import uuid
+
 from src.config.settings import (
     API_TITLE,
     API_VERSION,
@@ -13,7 +13,7 @@ from src.config.settings import (
     CORS_ALLOW_METHODS,
     CORS_ALLOW_HEADERS
 )
-from src.core.database import MongoDB
+
 from src.api.routes import router as api_router
 from src.core.speech.recognition import warm_up_inference_api
 

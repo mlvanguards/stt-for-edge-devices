@@ -13,7 +13,7 @@ from src.core.memory import ConversationMemory
 
 logger = logging.getLogger(__name__)
 
-# Initialize memory manager
+# Memory manager
 memory_manager = ConversationMemory()
 
 

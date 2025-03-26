@@ -33,7 +33,7 @@ async def extract_conversation_context(conversation_id: str) -> List[Dict]:
     # Get messages
     messages = await MongoDB.get_conversation_messages(conversation_id)
 
-    # Format messages for GPT - keep it simple with just role and content
+    # Format messages for GPT
     system_prompt = conversation["system_prompt"]
 
     chat_history = [{
@@ -41,7 +41,7 @@ async def extract_conversation_context(conversation_id: str) -> List[Dict]:
         "content": system_prompt
     }]
 
-    # Add conversation history (no timestamps or extra metadata)
+    # Add conversation history
     for message in messages:
         if message["role"] != "system":
             chat_history.append({
@@ -89,7 +89,7 @@ async def process_audio(
         # Use parameters directly
         _conversation_id = conversation_id
         _voice_id = voice_id if voice_id is not None else DEFAULT_VOICE_ID
-        _model_id = model_id  # Can be None - the process_audio_file function will use the default
+        _model_id = model_id  # Can be None
 
         # Handle conversation context
         if _conversation_id:
@@ -194,7 +194,7 @@ async def process_audio(
             "num_segments": len(sorted_transcriptions),
             "response": gpt_message,
             "model": gpt_result["model"],
-            "stt_model_used": model_used,  # Always include which model was actually used
+            "stt_model_used": model_used,
             "usage": gpt_result.get("usage", {}),
             "conversation_history": formatted_messages,
             "memory_stats": {
