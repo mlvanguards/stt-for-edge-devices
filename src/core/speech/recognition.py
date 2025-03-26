@@ -5,12 +5,12 @@ import re
 import asyncio
 
 from src.config.settings import (
-    HUGGINGFACE_TOKEN,
     HUGGINGFACE_API_URL,
     DEFAULT_STT_MODEL_ID,
     SPEECH_RECOGNITION_RETRIES,
     SPEECH_RECOGNITION_BACKOFF_FACTOR
 )
+from src.utils.api_keys_service import get_huggingface_token
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def process_audio_file(audio_content, content_type, model_id=None, force_split=False):
     """
     Process an audio file by sending it directly to HuggingFace API.
-    No preprocessing or ffmpeg/pydub dependencies.
+    Requires user-provided API key.
 
     Args:
         audio_content: Raw audio bytes
@@ -30,6 +30,14 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
         List of transcription segments (typically just one)
     """
     try:
+        # Get the API token (only user-provided)
+        huggingface_token = get_huggingface_token()
+
+        if not huggingface_token:
+            logger.error("HuggingFace token not available. User must provide an API key.")
+            return [{"index": 0,
+                     "text": "Error: HuggingFace API key is missing. Please provide your API key at /api-keys/huggingface"}]
+
         # Always use a valid model ID - fall back to the default if none provided
         selected_model = model_id if model_id else DEFAULT_STT_MODEL_ID
 
@@ -39,7 +47,7 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
         logger.info(f"Processing audio with model {selected_model} (content type: {content_type})")
 
         headers = {
-            "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
+            "Authorization": f"Bearer {huggingface_token}",
             "Content-Type": content_type,
         }
 
@@ -88,6 +96,12 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
                         time.sleep(wait_time)
                         continue
 
+                elif response.status_code == 401:
+                    # Authentication error - likely invalid token
+                    logger.error("Authentication failed. Please provide a valid HuggingFace API key.")
+                    return [{"index": 0,
+                             "text": "Error: Invalid HuggingFace API key. Please provide a valid API key at /api-keys/huggingface"}]
+
                 elif response.status_code == 503:
                     # Service unavailable, likely model loading
                     wait_time = max(5, (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
@@ -95,8 +109,8 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
                     time.sleep(wait_time)
                     continue
 
-                elif response.status_code in [400, 401, 403]:
-                    # Authentication or format issues
+                elif response.status_code in [400, 403]:
+                    # Format issues or forbidden
                     logger.error(f"API returned {response.status_code}: {response.text}")
 
                     # If first attempt, retry anyway - sometimes this happens on cold start
@@ -179,9 +193,16 @@ def clean_transcription(transcriptions):
 async def warm_up_inference_api():
     """
     Send a small dummy request to the Hugging Face API to trigger model loading.
-    This helps prevent the first real request from failing.
+    Only runs if a user-provided API key is available.
     """
     try:
+        # Get the API token (user-provided only)
+        huggingface_token = get_huggingface_token()
+
+        if not huggingface_token:
+            logger.warning("Cannot warm up HuggingFace API: No API token available")
+            return
+
         logger.info(f"Warming up Hugging Face Inference API for model: {DEFAULT_STT_MODEL_ID}")
 
         # Generate a tiny audio file (0.5 seconds of silence)
@@ -205,7 +226,7 @@ async def warm_up_inference_api():
         # Send warm-up request
         api_url = f"{HUGGINGFACE_API_URL}/{DEFAULT_STT_MODEL_ID}"
         headers = {
-            "Authorization": f"Bearer {HUGGINGFACE_TOKEN}",
+            "Authorization": f"Bearer {huggingface_token}",
             "Content-Type": "audio/wav",
         }
 

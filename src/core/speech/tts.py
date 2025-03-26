@@ -5,31 +5,35 @@ import requests
 from typing import Optional, Tuple
 
 from src.config.settings import (
-    ELEVENLABS_API_KEY,
     ELEVENLABS_API_URL,
     DEFAULT_VOICE_ID,
     TTS_MODEL_ID,
     TTS_DEFAULT_SETTINGS
 )
+from src.utils.api_keys_service import get_elevenlabs_api_key
 
 logger = logging.getLogger(__name__)
 
 
 def synthesize_speech(text: str, voice_id: str = DEFAULT_VOICE_ID) -> Tuple[bool, str, Optional[str]]:
     """
-    Convert text to speech using ElevenLabs API
+    Convert text to speech using ElevenLabs API.
+    Requires user-provided API key.
     Returns (success, message, optional base64 encoded audio)
     """
-    if not ELEVENLABS_API_KEY:
-        logger.error("ElevenLabs API key not configured")
-        return False, "ElevenLabs API key not configured", None
+    # Get the API key (user-provided only)
+    elevenlabs_api_key = get_elevenlabs_api_key()
+
+    if not elevenlabs_api_key:
+        logger.error("ElevenLabs API key not available. User must provide an API key.")
+        return False, "ElevenLabs API key is missing. Please provide your API key at /api-keys/elevenlabs", None
 
     if not text:
         logger.error("No text provided for speech synthesis")
         return False, "No text provided for speech synthesis", None
 
     headers = {
-        "xi-api-key": ELEVENLABS_API_KEY,
+        "xi-api-key": elevenlabs_api_key,
         "Content-Type": "application/json"
     }
 
@@ -43,6 +47,11 @@ def synthesize_speech(text: str, voice_id: str = DEFAULT_VOICE_ID) -> Tuple[bool
 
     try:
         response = requests.post(url, json=payload, headers=headers)
+
+        if response.status_code == 401:
+            logger.error("Authentication failed with ElevenLabs API. Please check your API key.")
+            return False, "Invalid ElevenLabs API key. Please provide a valid API key at /api-keys/elevenlabs", None
+
         response.raise_for_status()
 
         # Generate a unique identifier for the audio
@@ -68,18 +77,33 @@ def synthesize_speech(text: str, voice_id: str = DEFAULT_VOICE_ID) -> Tuple[bool
 
 async def get_available_voices():
     """
-    Get a list of available voices from ElevenLabs
+    Get a list of available voices from ElevenLabs.
+    Requires user-provided API key.
     """
-    if not ELEVENLABS_API_KEY:
-        logger.error("ElevenLabs API key not configured")
-        return {"success": False, "error": "ElevenLabs API key not configured"}
+    # Get the API key (user-provided only)
+    elevenlabs_api_key = get_elevenlabs_api_key()
+
+    if not elevenlabs_api_key:
+        logger.error("ElevenLabs API key not available. User must provide an API key.")
+        return {
+            "success": False,
+            "error": "ElevenLabs API key is missing. Please provide your API key at /api-keys/elevenlabs"
+        }
 
     headers = {
-        "xi-api-key": ELEVENLABS_API_KEY
+        "xi-api-key": elevenlabs_api_key
     }
 
     try:
         response = requests.get("https://api.elevenlabs.io/v1/voices", headers=headers)
+
+        if response.status_code == 401:
+            logger.error("Authentication failed with ElevenLabs API. Please check your API key.")
+            return {
+                "success": False,
+                "error": "Invalid ElevenLabs API key. Please provide a valid API key at /api-keys/elevenlabs"
+            }
+
         response.raise_for_status()
 
         voices_data = response.json()

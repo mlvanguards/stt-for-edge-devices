@@ -75,3 +75,32 @@ class ChatResponse(BaseModel):
 class TTSResponse(BaseModel):
     """Response model for text-to-speech"""
     audio_base64: str
+
+# Models for request/response validation
+class ApiKeySubmission(BaseModel):
+    """Model for API key submission"""
+    huggingface_token: str = Field(..., description="HuggingFace API token for speech recognition")
+    openai_api_key: str = Field(..., description="OpenAI API key for chat functionality")
+    elevenlabs_api_key: str = Field(..., description="ElevenLabs API key for text-to-speech")
+
+
+class ApiKeyStatus(BaseModel):
+    """Model for API key status response"""
+    huggingface_token: bool = Field(..., description="Whether HuggingFace token is set")
+    openai_api_key: bool = Field(..., description="Whether OpenAI API key is set")
+    elevenlabs_api_key: bool = Field(..., description="Whether ElevenLabs API key is set")
+    all_keys_set: bool = Field(..., description="Whether all required keys are set")
+
+
+class ApiKeyInfo(BaseModel):
+    """Model for API key information"""
+    key_name: str
+    description: str
+    is_set: bool
+
+
+class ApiKeyDetailsResponse(BaseModel):
+    """Detailed response with key information"""
+    keys: Dict[str, ApiKeyInfo]
+    all_keys_set: bool
+    missing_keys: Optional[list] = None

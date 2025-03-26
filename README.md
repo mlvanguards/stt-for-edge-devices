@@ -2,6 +2,10 @@
 
 A lightweight, optimized speech recognition application designed for child voice recognition with conversation continuity, text-to-speech feedback, and MongoDB persistence.
 
+## Demo
+
+[![Application Demo](https://img.youtube.com/vi/9-eIeuKasx0/0.jpg)](https://www.youtube.com/watch?v=9-eIeuKasx0)
+
 ## 🌟 Features
 
 - **Conversational Context**: Maintains conversation history across requests
@@ -10,6 +14,47 @@ A lightweight, optimized speech recognition application designed for child voice
 - **MongoDB Integration**: Persistent storage of conversations and transcriptions
 - **Serverless Ready**: Deployable with [Genezio](https://genez.io/)
 
+## 🔑 API Key Management
+
+This application requires users to provide their own API keys for the following services:
+
+- **Hugging Face**: For speech recognition (STT) models
+- **OpenAI**: For chat functionality (GPT models)
+- **ElevenLabs**: For text-to-speech synthesis
+
+### Submitting API Keys
+
+The application provides endpoints to submit your API keys which will be stored in memory for the duration of the session:
+
+#### Submit all API keys at once:
+
+```http
+POST /api-keys/submit
+```
+
+Request body:
+```json
+{
+  "huggingface_token": "your_huggingface_token",
+  "openai_api_key": "your_openai_api_key",
+  "elevenlabs_api_key": "your_elevenlabs_api_key"
+}
+```
+
+#### Check API key status:
+
+```http
+GET /api-keys/status
+```
+
+#### Reset API keys:
+
+```http
+DELETE /api-keys/reset
+```
+
+> **Important**: The application will not function correctly without these API keys. You must provide your own valid API keys before using the core features.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -17,25 +62,6 @@ A lightweight, optimized speech recognition application designed for child voice
 - Python 3.12+
 - Poetry (recommended) or pip
 - MongoDB database
-- Hugging Face API key
-- OpenAI API key
-- ElevenLabs API key
-
-### Environment Setup
-
-1. Copy the environment template:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Fill in your API keys in `.env`:
-   ```
-   HUGGINGFACE_TOKEN=your_huggingface_token
-   OPENAI_API_KEY=your_openai_api_key
-   ELEVENLABS_API_KEY=your_elevenlabs_api_key
-   MONGODB_URI=your_mongodb_connection_string
-   MONGODB_DB=stt-app-db
-   ```
 
 ### Installation
 
@@ -67,6 +93,15 @@ Visit `http://localhost:8000/docs` to access the Swagger UI and test the API.
 
 ## 📋 API Endpoints
 
+### API Key Management
+
+- **POST /api-keys/submit** - Submit all API keys at once
+- **POST /api-keys/huggingface** - Submit HuggingFace token
+- **POST /api-keys/openai** - Submit OpenAI API key
+- **POST /api-keys/elevenlabs** - Submit ElevenLabs API key
+- **GET /api-keys/status** - Check API key status
+- **DELETE /api-keys/reset** - Reset all API keys
+
 ### Speech-to-Text + Chat
 
 - **POST /chat** - Process audio, maintain conversation context, get AI response
@@ -92,7 +127,7 @@ Visit `http://localhost:8000/docs` to access the Swagger UI and test the API.
 ├── genezio.yaml          # Genezio serverless configuration
 ├── requirements.txt      # Python dependencies for deployment
 ├── pyproject.toml        # Poetry configuration
-├── .env.example          # Environment variables template
+├── .env.example          # Environment variables template 
 ├── data/                 # Example data and results
 └── src/
     ├── api/              # FastAPI server and routes
@@ -108,6 +143,8 @@ Visit `http://localhost:8000/docs` to access the Swagger UI and test the API.
     ├── models/           # Pydantic data models
     ├── resource_testing/ # Edge device profiling tools
     └── utils/            # Utility functions
+        ├── api_keys_service.py # API keys utility functions
+        └── audio_handling.py   # Audio processing utilities
 ```
 
 ## 🔍 Edge Device Profiling

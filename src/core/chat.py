@@ -3,28 +3,35 @@ import requests
 from typing import List, Dict, Any, Optional
 
 from src.config.settings import (
-    OPENAI_API_KEY,
     OPENAI_API_URL,
     GPT_MODEL,
     GPT_TEMPERATURE,
     GPT_MAX_TOKENS
 )
 from src.core.memory import ConversationMemory
+from src.utils.api_keys_service import get_openai_api_key
 
 logger = logging.getLogger(__name__)
 
-# Memory manager
 memory_manager = ConversationMemory()
 
 
 def get_chat_completion(prompt: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """
-    Get a response from OpenAI's GPT model with optimized conversation history
-    Returns the response and usage statistics
+    Get a response from OpenAI's GPT model with optimized conversation history.
+    Requires user-provided API key.
+    Returns the response and usage statistics.
     """
-    if not OPENAI_API_KEY:
-        logger.error("OpenAI API key not configured")
-        return {"success": False, "error": "OpenAI API key not configured"}
+    # Get the API key (user-provided only)
+    openai_api_key = get_openai_api_key()
+
+    if not openai_api_key:
+        logger.error("OpenAI API key not available. User must provide an API key.")
+        return {
+            "success": False,
+            "error": "OpenAI API key is missing. Please provide your API key at /api-keys/openai",
+            "message": "I'm sorry, but I can't process your request because the OpenAI API key is missing. Please provide your API key at /api-keys/openai"
+        }
 
     if conversation_history is None:
         conversation_history = []
@@ -41,7 +48,7 @@ def get_chat_completion(prompt: str, conversation_history: Optional[List[Dict[st
     logger.info(f"Optimized conversation history from {original_history_length} to {optimized_history_length} messages")
 
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Authorization": f"Bearer {openai_api_key}",
         "Content-Type": "application/json"
     }
 
@@ -54,6 +61,15 @@ def get_chat_completion(prompt: str, conversation_history: Optional[List[Dict[st
 
     try:
         response = requests.post(OPENAI_API_URL, headers=headers, json=data)
+
+        if response.status_code == 401:
+            logger.error("Authentication failed with OpenAI API. Please check your API key.")
+            return {
+                "success": False,
+                "error": "Invalid OpenAI API key. Please provide a valid API key at /api-keys/openai",
+                "message": "I'm sorry, but I can't process your request because the OpenAI API key is invalid. Please provide a valid API key at /api-keys/openai"
+            }
+
         response.raise_for_status()
 
         result = response.json()
