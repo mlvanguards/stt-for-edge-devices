@@ -1,8 +1,9 @@
 <p align="center">   
    <h1 align="center">Speech-to-Text for Edge Devices 🎤</h1>
    <h3 align="center">A lightweight, optimized speech recognition application designed for child voice recognition with conversation continuity, text-to-speech feedback, and MongoDB persistence.</h3>
-   <iframe width="560" height="315" src="https://www.youtube.com/embed/9-eIeuKasx0?si=mh2LHf89AZzLWV6O" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 </p>
+
+[![Application Demo](https://img.youtube.com/vi/9-eIeuKasx0/0.jpg)](https://www.youtube.com/watch?v=9-eIeuKasx0)
 
 ## 🌟 Features
 
