@@ -1,10 +1,8 @@
-# Speech-to-Text for Edge Devices 🎤
-
-A lightweight, optimized speech recognition application designed for child voice recognition with conversation continuity, text-to-speech feedback, and MongoDB persistence.
-
-## Demo
-
-[![Application Demo](https://img.youtube.com/vi/9-eIeuKasx0/0.jpg)](https://www.youtube.com/watch?v=9-eIeuKasx0)
+<p align="center">   
+   <h1 align="center">Speech-to-Text for Edge Devices 🎤</h1>
+   <h3 align="center">A lightweight, optimized speech recognition application designed for child voice recognition with conversation continuity, text-to-speech feedback, and MongoDB persistence.</h3>
+   <iframe width="560" height="315" src="https://www.youtube.com/embed/9-eIeuKasx0?si=mh2LHf89AZzLWV6O" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</p>
 
 ## 🌟 Features
 
@@ -33,6 +31,7 @@ POST /api-keys/submit
 ```
 
 Request body:
+
 ```json
 {
   "huggingface_token": "your_huggingface_token",
@@ -91,6 +90,30 @@ uvicorn src.api.main:app --reload
 
 Visit `http://localhost:8000/docs` to access the Swagger UI and test the API.
 
+## 🖥️ Frontend Interface
+
+The frontend app is built as a separate project to keep the backend lightweight and focused.
+
+👉 You can find the full frontend repository here: 🔗 [stt-for-edge-devices-frontend](https://github.com/mlvanguards/stt-for-edge-devices-frontend)
+
+This React-based interface connects directly to the FastAPI backend, allows converations with different model/voices configuration, transcriptions and receives AI responses in both audio and text.
+
+To run the frontend locally:
+
+```bash
+# Clone the repo
+git clone https://github.com/mlvanguards/stt-for-edge-devices-frontend.git
+cd stt-for-edge-devices-frontend
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+
+Once running, the frontend will connect to your local FastAPI server at http://localhost:8000 by default.
+
 ## 📋 API Endpoints
 
 ### API Key Management
@@ -127,7 +150,7 @@ Visit `http://localhost:8000/docs` to access the Swagger UI and test the API.
 ├── genezio.yaml          # Genezio serverless configuration
 ├── requirements.txt      # Python dependencies for deployment
 ├── pyproject.toml        # Poetry configuration
-├── .env.example          # Environment variables template 
+├── .env.example          # Environment variables template
 ├── data/                 # Example data and results
 └── src/
     ├── api/              # FastAPI server and routes
@@ -157,6 +180,7 @@ python src/resource_testing/run_edge_profiler.py
 ```
 
 The profiler measures:
+
 - Real-time processing factor
 - Memory usage
 - CPU utilization
@@ -166,11 +190,13 @@ The profiler measures:
 ## 🚢 Deployment with Genezio
 
 1. Install Genezio CLI:
+
    ```bash
    npm install -g genezio
    ```
 
 2. Log in to Genezio:
+
    ```bash
    genezio login
    ```
