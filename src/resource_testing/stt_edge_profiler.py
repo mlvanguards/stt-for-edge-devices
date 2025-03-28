@@ -9,9 +9,11 @@ import pandas as pd
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 from datetime import datetime
 
+from src.config.settings import settings
+
 
 class STTEdgeProfiler:
-    def __init__(self, model_name, sampling_interval=0.1):
+    def __init__(self, model_name, sampling_interval=None):
         """
         Initialize the profiler for a Wav2Vec2 Speech-to-Text model with edge performance focus.
 
@@ -20,7 +22,8 @@ class STTEdgeProfiler:
             sampling_interval (float): How often to sample resource usage (seconds)
         """
         self.model_name = model_name
-        self.sampling_interval = sampling_interval
+        # Use settings value if not provided
+        self.sampling_interval = sampling_interval or settings.TESTING_SAMPLING_INTERVAL
         self.metrics = []
         self.monitoring = False
         self.process = psutil.Process(os.getpid())
@@ -36,8 +39,8 @@ class STTEdgeProfiler:
             self.device = "mps"  # Apple Silicon GPU
             print("Using Apple Silicon MPS")
         else:
-            self.device = "cpu"
-            print("Using CPU only")
+            self.device = settings.TESTING_DEFAULT_DEVICE
+            print(f"Using {self.device}")
 
         print(f"Loading STT model {model_name} on {self.device}...")
         try:
@@ -103,7 +106,7 @@ class STTEdgeProfiler:
             self.monitor_thread.join(timeout=1.0)
         return self
 
-    def run_inference(self, audio_path, num_repeats=5, stream_simulation=False):
+    def run_inference(self, audio_path, num_repeats=None, stream_simulation=False):
         """
         Run STT inference on the given audio file and monitor resource usage
 
@@ -117,18 +120,21 @@ class STTEdgeProfiler:
             DataFrame: Detailed metrics over time
             str: Transcribed text
         """
+        # Use settings value if not provided
+        num_repeats = num_repeats or settings.TESTING_DEFAULT_NUM_REPEATS
+
         # Load and preprocess audio using torchaudio
         print(f"Loading audio file: {audio_path}")
         waveform, sampling_rate = torchaudio.load(audio_path)
 
         # Resample to 16kHz if needed (most STT models expect 16kHz)
-        if sampling_rate != 16000:
-            resampler = torchaudio.transforms.Resample(orig_freq=sampling_rate, new_freq=16000)
+        if sampling_rate != settings.AUDIO_SAMPLE_RATE:
+            resampler = torchaudio.transforms.Resample(orig_freq=sampling_rate, new_freq=settings.AUDIO_SAMPLE_RATE)
             waveform = resampler(waveform)
-            sampling_rate = 16000
+            sampling_rate = settings.AUDIO_SAMPLE_RATE
 
         # Convert to mono if stereo
-        if waveform.shape[0] > 1:
+        if waveform.shape[0] > settings.AUDIO_CHANNELS:
             waveform = torch.mean(waveform, dim=0, keepdim=True)
 
         # Convert to numpy for compatibility with transformers
@@ -163,7 +169,8 @@ class STTEdgeProfiler:
                         chunk = audio_array[start_idx:end_idx]
 
                         # Process chunk - modified for Wav2Vec2
-                        chunk_inputs = self.processor(chunk, sampling_rate=16000, return_tensors="pt")
+                        chunk_inputs = self.processor(chunk, sampling_rate=settings.AUDIO_SAMPLE_RATE,
+                                                      return_tensors="pt")
                         chunk_inputs = {k: v.to(self.device) for k, v in chunk_inputs.items()}
 
                         # Time the inference
@@ -201,7 +208,7 @@ class STTEdgeProfiler:
                         torch.cuda.empty_cache() if self.device == "cuda" else None
 
                     # Prepare inputs for Wav2Vec2
-                    inputs = self.processor(audio_array, sampling_rate=16000, return_tensors="pt")
+                    inputs = self.processor(audio_array, sampling_rate=settings.AUDIO_SAMPLE_RATE, return_tensors="pt")
                     inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
                     # Measure inference time
@@ -276,17 +283,19 @@ class STTEdgeProfiler:
         # Estimate edge device suitability score (0-10 scale)
         edge_score = 10.0
 
-        # Penalize for high memory usage (> 2GB is bad for edge)
-        if summary['max_memory_mb'] > 2000:
-            edge_score -= min(5, (summary['max_memory_mb'] - 2000) / 1000)
+        # Penalize for high memory usage
+        memory_threshold = settings.TESTING_EDGE_MEMORY_THRESHOLD_MB
+        if summary['max_memory_mb'] > memory_threshold:
+            edge_score -= min(5, (summary['max_memory_mb'] - memory_threshold) / 1000)
 
         # Penalize for slow processing (realtime factor > 1.0 is bad)
         if summary['realtime_factor'] > 1.0:
             edge_score -= min(5, (summary['realtime_factor'] - 1.0) * 5)
 
         # Penalize for high CPU usage
-        if summary['avg_cpu_percent'] > 50:
-            edge_score -= min(3, (summary['avg_cpu_percent'] - 50) / 20)
+        cpu_threshold = settings.TESTING_EDGE_CPU_THRESHOLD_PERCENT
+        if summary['avg_cpu_percent'] > cpu_threshold:
+            edge_score -= min(3, (summary['avg_cpu_percent'] - cpu_threshold) / 20)
 
         # Clamp score between 0-10
         edge_score = max(0, min(10, edge_score))
@@ -342,7 +351,8 @@ class STTEdgeProfiler:
             # Plot CPU usage
             plt.subplot(4, 1, 1)
             plt.plot(range(len(df)), df['cpu_percent'], label='CPU %', color='green')
-            plt.axhline(y=50, color='r', linestyle='--', alpha=0.3, label='Edge device threshold')
+            plt.axhline(y=settings.TESTING_EDGE_CPU_THRESHOLD_PERCENT, color='r', linestyle='--', alpha=0.3,
+                        label='Edge device threshold')
             plt.title(f'CPU Usage - {self.model_name}')
             plt.ylabel('CPU %')
             plt.grid(True)
@@ -351,7 +361,8 @@ class STTEdgeProfiler:
             # Plot Memory usage
             plt.subplot(4, 1, 2)
             plt.plot(range(len(df)), df['memory_rss_mb'], label='Memory (MB)', color='blue')
-            plt.axhline(y=2000, color='r', linestyle='--', alpha=0.3, label='2GB Edge threshold')
+            plt.axhline(y=settings.TESTING_EDGE_MEMORY_THRESHOLD_MB, color='r', linestyle='--', alpha=0.3,
+                        label='2GB Edge threshold')
             plt.title('Memory Usage')
             plt.ylabel('Memory (MB)')
             plt.grid(True)
@@ -394,85 +405,3 @@ class STTEdgeProfiler:
             plt.close()
         except ImportError:
             print("Matplotlib not installed. Skipping plot generation.")
-
-
-# Simple usage example
-if __name__ == "__main__":
-    # Replace with your model name - smaller models better for edge
-    MODEL_NAME = "StefanStefan/Wav2Vec-100-CSR-12M"  # Your specific model
-
-    # Replace with path to your audio file
-    AUDIO_PATH = "sample_audio.wav"  # Example audio file
-
-    # Create sample audio if needed
-    if not os.path.exists(AUDIO_PATH):
-        try:
-            print(f"Creating sample audio file {AUDIO_PATH}")
-            sample_rate = 16000
-            duration = 5  # seconds
-            # Generate a simple sine wave using torch
-            t = torch.linspace(0, duration, int(sample_rate * duration))
-            # Generate a simple sine wave (440 Hz tone)
-            waveform = 0.5 * torch.sin(2 * np.pi * 440 * t).unsqueeze(0)
-            torchaudio.save(AUDIO_PATH, waveform, sample_rate)
-            print(f"Created sample audio: {AUDIO_PATH}")
-        except Exception as e:
-            print(f"Failed to create sample audio: {e}")
-            print("Please provide your own audio file.")
-            exit(1)
-
-    # Initialize profiler
-    profiler = STTEdgeProfiler(model_name=MODEL_NAME, sampling_interval=0.05)
-
-    # Run inference with edge simulation options
-    summary, detailed_metrics, transcription = profiler.run_inference(
-        AUDIO_PATH,
-        num_repeats=3,
-        stream_simulation=True  # Simulate streaming mode
-    )
-
-    # Print summary results
-    print("\nSummary Results:")
-    for key, value in summary.items():
-        print(f"{key}: {value}")
-
-    print(f"\nTranscription: {transcription}")
-
-    # Edge suitability assessment
-    print("\nEdge Device Suitability Assessment:")
-    print(f"Score (0-10): {summary.get('edge_suitability_score', 'N/A')}")
-
-    if 'edge_suitability_score' in summary:
-        score = summary['edge_suitability_score']
-        if score >= 8:
-            print("✅ EXCELLENT: This model should work well on most edge devices")
-        elif score >= 6:
-            print("✅ GOOD: This model should work on mid-range edge devices")
-        elif score >= 4:
-            print("⚠️ FAIR: This model may work on high-end edge devices only")
-        else:
-            print("❌ POOR: This model is likely not suitable for edge deployment")
-
-    if 'realtime_factor' in summary:
-        rt_factor = summary['realtime_factor']
-        if rt_factor <= 0.5:
-            print(f"✅ FAST: Processes audio at {1 / rt_factor:.1f}x realtime")
-        elif rt_factor <= 1.0:
-            print(f"✅ REALTIME: Processes audio at realtime speed")
-        else:
-            print(f"⚠️ SLOW: Processes audio at {rt_factor:.1f}x slower than realtime")
-
-    if 'max_memory_mb' in summary:
-        memory_gb = summary['max_memory_mb'] / 1000
-        if memory_gb <= 0.5:
-            print(f"✅ LIGHTWEIGHT: Peak memory usage {memory_gb:.2f}GB")
-        elif memory_gb <= 2.0:
-            print(f"✅ MODERATE: Peak memory usage {memory_gb:.2f}GB")
-        else:
-            print(f"⚠️ HEAVY: Peak memory usage {memory_gb:.2f}GB may be too high for edge devices")
-
-    # Save results
-    profiler.save_results(summary, detailed_metrics, AUDIO_PATH, transcription)
-
-    # Generate visualization
-    profiler.visualize_results(detailed_metrics, summary)

@@ -2,12 +2,7 @@ import logging
 import requests
 from typing import List, Dict, Any, Optional
 
-from src.config.settings import (
-    OPENAI_API_URL,
-    GPT_MODEL,
-    GPT_TEMPERATURE,
-    GPT_MAX_TOKENS
-)
+from src.config.settings import settings
 from src.core.memory import ConversationMemory
 from src.utils.api_keys_service import get_openai_api_key
 
@@ -53,14 +48,14 @@ def get_chat_completion(prompt: str, conversation_history: Optional[List[Dict[st
     }
 
     data = {
-        "model": GPT_MODEL,
+        "model": settings.GPT_MODEL,
         "messages": messages,
-        "temperature": GPT_TEMPERATURE,
-        "max_tokens": GPT_MAX_TOKENS
+        "temperature": settings.GPT_TEMPERATURE,
+        "max_tokens": settings.GPT_MAX_TOKENS
     }
 
     try:
-        response = requests.post(OPENAI_API_URL, headers=headers, json=data)
+        response = requests.post(settings.OPENAI_API_URL, headers=headers, json=data)
 
         if response.status_code == 401:
             logger.error("Authentication failed with OpenAI API. Please check your API key.")
@@ -77,7 +72,7 @@ def get_chat_completion(prompt: str, conversation_history: Optional[List[Dict[st
         return {
             "success": True,
             "message": result["choices"][0]["message"]["content"],
-            "model": GPT_MODEL,
+            "model": settings.GPT_MODEL,
             "usage": result.get("usage", {}),
             "memory_optimized": True,
             "original_history_length": original_history_length,

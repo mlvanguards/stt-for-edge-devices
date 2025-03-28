@@ -29,6 +29,7 @@ ffmpeg = "^1.4"
 pydub = "^0.25.1"
 gitingest = "^0.1.4"
 prettytable = "^3.15.1"
+pydantic-settings = "^2.8.1"
 
 
 [build-system]

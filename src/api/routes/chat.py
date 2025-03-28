@@ -4,18 +4,12 @@ from typing import Optional, List, Dict
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status
 from datetime import datetime
 
+from src.config.settings import settings
 from src.core.database import MongoDB
 from src.core.speech.recognition import process_audio_file, clean_transcription
 from src.core.speech.tts import synthesize_speech
 from src.core.chat import get_chat_completion
-from src.models.conversation import ChatResponse
-from src.config.settings import (
-    DEFAULT_VOICE_ID,
-    DEFAULT_SYSTEM_PROMPT,
-    ALLOWED_AUDIO_CONTENT_TYPES,
-    AVAILABLE_STT_MODELS,
-    DEFAULT_STT_MODEL_ID
-)
+from src.models.responses import ChatResponse
 
 router = APIRouter(tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -71,15 +65,15 @@ async def process_audio(
     - **force_split**: Boolean flag (not used in direct processing)
     """
     # Validate the uploaded file type
-    if file.content_type not in ALLOWED_AUDIO_CONTENT_TYPES:
+    if file.content_type not in settings.ALLOWED_AUDIO_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid file type: {file.content_type}"
         )
 
     # Validate model_id if provided
-    if model_id and model_id not in [model["id"] for model in AVAILABLE_STT_MODELS]:
-        valid_models = [model["id"] for model in AVAILABLE_STT_MODELS]
+    if model_id and model_id not in [model["id"] for model in settings.AVAILABLE_STT_MODELS]:
+        valid_models = [model["id"] for model in settings.AVAILABLE_STT_MODELS]
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid model ID: {model_id}. Valid options: {valid_models}"
@@ -88,7 +82,7 @@ async def process_audio(
     try:
         # Use parameters directly
         _conversation_id = conversation_id
-        _voice_id = voice_id if voice_id is not None else DEFAULT_VOICE_ID
+        _voice_id = voice_id if voice_id is not None else settings.DEFAULT_VOICE_ID
         _model_id = model_id  # Can be None
 
         # Handle conversation context
@@ -102,7 +96,7 @@ async def process_audio(
                 )
 
             _system_prompt = conversation["system_prompt"]
-            _voice_id = conversation.get("voice_id", DEFAULT_VOICE_ID)
+            _voice_id = conversation.get("voice_id", settings.DEFAULT_VOICE_ID)
 
             # If no model_id was specified in request, use the one from conversation if available
             if not _model_id and "stt_model_id" in conversation:
@@ -113,7 +107,7 @@ async def process_audio(
         else:
             # Create a new conversation
             _conversation_id = str(uuid.uuid4())
-            _system_prompt = DEFAULT_SYSTEM_PROMPT
+            _system_prompt = settings.DEFAULT_SYSTEM_PROMPT
 
             # Create a new conversation in the database
             await MongoDB.create_conversation(
@@ -183,7 +177,7 @@ async def process_audio(
                     "content": message["content"]
                 })
 
-        model_used = _model_id if _model_id else DEFAULT_STT_MODEL_ID
+        model_used = _model_id if _model_id else settings.DEFAULT_STT_MODEL_ID
 
         # Build the response with all relevant information
         result = {
@@ -227,8 +221,8 @@ async def available_stt_models():
     """
     try:
         return {
-            "models": AVAILABLE_STT_MODELS,
-            "default_model": DEFAULT_STT_MODEL_ID
+            "models": settings.AVAILABLE_STT_MODELS,
+            "default_model": settings.DEFAULT_STT_MODEL_ID
         }
     except Exception as e:
         logger.error(f"Error fetching available models: {str(e)}")

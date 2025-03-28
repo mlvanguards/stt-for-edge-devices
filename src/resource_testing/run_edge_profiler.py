@@ -2,6 +2,7 @@ import os
 import torch
 import torchaudio
 from src.resource_testing.stt_edge_profiler import STTEdgeProfiler
+from src.config.settings import settings
 
 # Model to test
 MODEL_NAME = "StefanStefan/Wav2Vec-100-CSR-12M"
@@ -19,7 +20,7 @@ if not os.path.exists(AUDIO_PATH):
 
     test_path = "test_audio.wav"
     print(f"Creating test audio file: {test_path}")
-    sample_rate = 16000
+    sample_rate = settings.AUDIO_SAMPLE_RATE
     duration = 10  # seconds
 
     # Generate a simple wave pattern with spoken-word-like characteristics
@@ -43,13 +44,16 @@ print("This will measure CPU, memory, and battery usage during transcription")
 
 try:
     # Initialize profiler
-    profiler = STTEdgeProfiler(model_name=MODEL_NAME, sampling_interval=0.1)
+    profiler = STTEdgeProfiler(
+        model_name=MODEL_NAME,
+        sampling_interval=settings.TESTING_SAMPLING_INTERVAL
+    )
 
     # Run basic test first (whole audio file)
     print("\n==== Running basic inference test ====")
     summary1, metrics1, transcript1 = profiler.run_inference(
         AUDIO_PATH,
-        num_repeats=3,
+        num_repeats=settings.TESTING_DEFAULT_NUM_REPEATS,
         stream_simulation=False
     )
 
@@ -66,7 +70,7 @@ try:
     print("\n==== Running streaming simulation test ====")
     summary2, metrics2, transcript2 = profiler.run_inference(
         AUDIO_PATH,
-        num_repeats=3,
+        num_repeats=settings.TESTING_DEFAULT_NUM_REPEATS,
         stream_simulation=True
     )
 

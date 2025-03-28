@@ -4,23 +4,22 @@ import logging
 import requests
 from typing import Optional, Tuple
 
-from src.config.settings import (
-    ELEVENLABS_API_URL,
-    DEFAULT_VOICE_ID,
-    TTS_MODEL_ID,
-    TTS_DEFAULT_SETTINGS
-)
+from src.config.settings import settings
 from src.utils.api_keys_service import get_elevenlabs_api_key
 
 logger = logging.getLogger(__name__)
 
 
-def synthesize_speech(text: str, voice_id: str = DEFAULT_VOICE_ID) -> Tuple[bool, str, Optional[str]]:
+def synthesize_speech(text: str, voice_id: str = None) -> Tuple[bool, str, Optional[str]]:
     """
     Convert text to speech using ElevenLabs API.
     Requires user-provided API key.
     Returns (success, message, optional base64 encoded audio)
     """
+    # Use default voice ID if none provided
+    if voice_id is None:
+        voice_id = settings.DEFAULT_VOICE_ID
+
     # Get the API key (user-provided only)
     elevenlabs_api_key = get_elevenlabs_api_key()
 
@@ -39,11 +38,11 @@ def synthesize_speech(text: str, voice_id: str = DEFAULT_VOICE_ID) -> Tuple[bool
 
     payload = {
         "text": text,
-        "model_id": TTS_MODEL_ID,
-        "voice_settings": TTS_DEFAULT_SETTINGS
+        "model_id": settings.TTS_MODEL_ID,
+        "voice_settings": settings.TTS_DEFAULT_SETTINGS
     }
 
-    url = f"{ELEVENLABS_API_URL}/{voice_id}"
+    url = f"{settings.ELEVENLABS_API_URL}/{voice_id}"
 
     try:
         response = requests.post(url, json=payload, headers=headers)

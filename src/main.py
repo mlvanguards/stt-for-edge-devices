@@ -1,16 +1,13 @@
-from src.data_config.config import Config
 from src.data.dataset_manager import DatasetManager
 from src.asr.asr_processor import ASRProcessor
 from src.data.data_normalizer import DataNormalizer
 from src.data.data_splitter import DataSplitter
 from src.data.dataset_creator import DatasetCreator
-
+from src.config.settings import settings
 
 def main():
-    # Initialize configuration
-    config = Config()
-    # Download dataset
-    dataset_manager = DatasetManager(config)
+    # Initialize dataset manager
+    dataset_manager = DatasetManager()
     dataset_path = dataset_manager.download_dataset()
 
     # Verify dataset
@@ -19,38 +16,35 @@ def main():
         return
 
     # Process dataset
-    processor = ASRProcessor(config)
+    processor = ASRProcessor()
     processor.load_model()
 
     # Process audio files
     results = processor.process_dataset(
         input_dir=str(dataset_path),
         output_file="../data/transcriptions-test.json",
-        max_duration=config.dataset['max_duration'],
-        batch_size=config.model['batch_size'],
-        save_interval=config.model['save_interval']
+        max_duration=settings.DATA_MAX_AUDIO_DURATION,
+        batch_size=settings.MODEL_BATCH_SIZE,
+        save_interval=settings.MODEL_SAVE_INTERVAL
     )
 
     # Normalize data
     DataNormalizer.process_data(
         input_file="../data/transcriptions-test.json",
-        output_dir="processed_data",
-        config=config
+        output_dir="processed_data"
     )
 
     # Split data
     DataSplitter.split_data(
         input_file="processed_data/normalized_clean_asr.json",
-        output_dir="split_data",
-        config=config
+        output_dir="split_data"
     )
 
     # Create dataset
     dataset_creator = DatasetCreator()
     dataset = dataset_creator.create_dataset(
         data_dir="split_data",
-        audio_dir=str(dataset_manager.get_dataset_path()),
-        config=config
+        audio_dir=str(dataset_manager.get_dataset_path())
     )
 
     # Push to hub

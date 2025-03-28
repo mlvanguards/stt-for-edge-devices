@@ -1,7 +1,8 @@
 import logging
-import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
+
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,19 +20,14 @@ class MongoDB:
     @classmethod
     async def connect(cls):
         """Connect to MongoDB and initialize collections and indexes"""
-        from src.config.settings import (
-            MONGODB_CONVERSATIONS_COLLECTION,
-            MONGODB_MESSAGES_COLLECTION
-        )
-
         if cls._initialized and cls.client is not None and cls.db is not None:
             # Already connected
             return True
 
         try:
             # Get connection string from environment - use genezio's environment variable format
-            mongodb_uri = os.getenv("MONGODB_URI")
-            mongodb_db = os.getenv("MONGODB_DB", "stt-app-db")
+            mongodb_uri = settings.MONGODB_URI
+            mongodb_db = settings.MONGODB_DB
 
             if not mongodb_uri:
                 logger.error("No MongoDB connection string found in environment variables")
@@ -40,12 +36,12 @@ class MongoDB:
             # Connect to MongoDB with connection pooling settings optimized for serverless
             cls.client = AsyncIOMotorClient(
                 mongodb_uri,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=10000,
-                maxPoolSize=10,
-                minPoolSize=1,
-                maxIdleTimeMS=30000,
-                retryWrites=True
+                serverSelectionTimeoutMS=settings.MONGODB_SERVER_SELECTION_TIMEOUT_MS,
+                connectTimeoutMS=settings.MONGODB_CONNECT_TIMEOUT_MS,
+                maxPoolSize=settings.MONGODB_MAX_POOL_SIZE,
+                minPoolSize=settings.MONGODB_MIN_POOL_SIZE,
+                maxIdleTimeMS=settings.MONGODB_MAX_IDLE_TIME_MS,
+                retryWrites=settings.MONGODB_RETRY_WRITES
             )
 
             # Test the connection
@@ -53,9 +49,9 @@ class MongoDB:
 
             # Use the database name from environment or fallback
             cls.db = cls.client[mongodb_db]
-            cls.conversations_collection = cls.db[MONGODB_CONVERSATIONS_COLLECTION]
-            cls.messages_collection = cls.db[MONGODB_MESSAGES_COLLECTION]
-            cls.memory_collection = cls.db["memory_summaries"]  # New collection for memory
+            cls.conversations_collection = cls.db[settings.MONGODB_CONVERSATIONS_COLLECTION]
+            cls.messages_collection = cls.db[settings.MONGODB_MESSAGES_COLLECTION]
+            cls.memory_collection = cls.db[settings.MONGODB_MEMORY_COLLECTION]  # New collection for memory
 
             # Create indexes for better query performance
             await cls.conversations_collection.create_index("conversation_id", unique=True)
@@ -166,8 +162,6 @@ class MongoDB:
     @classmethod
     async def create_conversation(cls, conversation_id, system_prompt, voice_id, stt_model_id=None):
         """Create a new conversation with string timestamps"""
-        from src.config.settings import DEFAULT_STT_MODEL_ID
-
         now = datetime.utcnow().isoformat()
         await cls.ensure_connection()
 
@@ -176,7 +170,7 @@ class MongoDB:
             "conversation_id": conversation_id,
             "system_prompt": system_prompt,
             "voice_id": voice_id,
-            "stt_model_id": stt_model_id or DEFAULT_STT_MODEL_ID,
+            "stt_model_id": stt_model_id or settings.DEFAULT_STT_MODEL_ID,
             "created_at": now,
             "last_updated": now,
             "message_count": 0,

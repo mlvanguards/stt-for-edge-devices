@@ -2,8 +2,9 @@ import json
 import re
 from collections import Counter
 import os
-from typing import Optional
-from src.data_config.config import Config
+
+from src.config.settings import settings
+
 
 class DataNormalizer:
     @staticmethod
@@ -23,7 +24,7 @@ class DataNormalizer:
 
     @staticmethod
     def detect_likely_errors(text: str) -> bool:
-        """Detect likely transcription errors based on various heuristics."""
+        """Detect likely transcription errors based on various heuristics from settings."""
         words = text.split()
 
         # Check 1: No repeated words in sequence
@@ -34,26 +35,29 @@ class DataNormalizer:
         # Check 2: Word frequency
         word_counts = Counter(words)
         for count in word_counts.values():
-            if count > 3:  # Same word appears more than 3 times
+            if count > settings.DATA_MAX_WORD_FREQUENCY:  # Same word appears more than max allowed times
                 return False
 
         # Check 3: Average word length
+        if len(words) == 0:
+            return False
+
         avg_word_length = sum(len(word) for word in words) / len(words)
-        if not (2 <= avg_word_length <= 10):
+        if not (settings.DATA_MIN_WORD_LENGTH <= avg_word_length <= 10):
             return False
 
         # Check 4: Percentage of short words
         short_words = sum(1 for word in words if len(word) == 1)
-        if short_words / len(words) > 0.2:  # More than 20% are single letters
+        if short_words / len(words) > settings.DATA_SHORT_WORD_THRESHOLD:  # More than threshold % are single letters
             return False
 
         return True
 
     @staticmethod
     def process_data(
-        input_file: str,
-        output_dir: str = "processed_data",
-        config: Optional[Config] = None
+            input_file: str,
+            output_dir: str = "processed_data",
+            config=None  # Kept for backward compatibility but not used
     ) -> None:
         """Process ASR dataset and save normalized/filtered results."""
         os.makedirs(output_dir, exist_ok=True)

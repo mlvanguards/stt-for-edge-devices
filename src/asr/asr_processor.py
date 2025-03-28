@@ -4,16 +4,16 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 from src.utils.audio_handling import AudioUtils
-from src.data_config.config import Config
+from src.config.settings import settings
 
 class ASRProcessor:
-    def __init__(self, config: Config):
-        self.config = config
+    def __init__(self):
+        """Initialize the ASR processor with settings."""
         self.model = None
 
     def load_model(self, device: str = None) -> None:
         """Load SpeechBrain ASR model."""
-        device = device or self.config.model['device']
+        device = device or settings.MODEL_DEVICE
         print("Loading Conformer ASR model...")
         from speechbrain.inference.ASR import EncoderDecoderASR
         self.model = EncoderDecoderASR.from_hparams(
@@ -55,25 +55,25 @@ class ASRProcessor:
             save_interval: Optional[int] = None
     ) -> List[Dict]:
         """Process audio files with duration filtering."""
-        max_duration = max_duration or self.config.dataset['max_duration']
-        batch_size = batch_size or self.config.model['batch_size']
-        save_interval = save_interval or self.config.model['save_interval']
+        max_duration = max_duration or settings.DATA_MAX_AUDIO_DURATION
+        batch_size = batch_size or settings.MODEL_BATCH_SIZE
+        save_interval = save_interval or settings.MODEL_SAVE_INTERVAL
 
         # Set CPU core limit
-        AudioUtils.limit_cpu_cores(self.config.model['num_cores'])
+        AudioUtils.limit_cpu_cores(settings.MODEL_NUM_CORES)
 
         input_path = Path(input_dir)
         potential_subdir = input_path / "output"
         if potential_subdir.exists() and potential_subdir.is_dir():
             input_path = potential_subdir
 
-        # Search for audio files recursively in the determined input_path.
+        # Search for audio files recursively in the determined input_path
         audio_files = []
-        for ext in self.config.dataset['audio_extensions']:
+        for ext in settings.DATA_AUDIO_EXTENSIONS:
             audio_files.extend(input_path.rglob(f"*{ext}"))
         print(f"Found {len(audio_files)} audio files in directory {input_path}")
 
-        # Filter files based on duration.
+        # Filter files based on duration
         filtered_files = []
         for file in audio_files:
             duration = AudioUtils.get_audio_duration(file)
@@ -85,7 +85,7 @@ class ASRProcessor:
         results = []
         files_to_process = []
 
-        # Load existing results if any.
+        # Load existing results if any
         if os.path.exists(output_file):
             with open(output_file, 'r', encoding='utf-8') as f:
                 results = json.load(f)
@@ -100,7 +100,7 @@ class ASRProcessor:
             print("No files to process!")
             return results
 
-        # Process files in batches.
+        # Process files in batches
         for i, audio_file in enumerate(files_to_process):
             result = self.process_audio_file(audio_file)
             results.append(result)
@@ -113,5 +113,10 @@ class ASRProcessor:
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(results, f, indent=2, ensure_ascii=False)
                 print(f"\nIntermediate results saved after {len(results)} files")
+
+        # Final save
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        print(f"\nAll results saved: {len(results)} files processed")
 
         return results

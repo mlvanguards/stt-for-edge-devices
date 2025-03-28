@@ -4,12 +4,7 @@ import requests
 import re
 import asyncio
 
-from src.config.settings import (
-    HUGGINGFACE_API_URL,
-    DEFAULT_STT_MODEL_ID,
-    SPEECH_RECOGNITION_RETRIES,
-    SPEECH_RECOGNITION_BACKOFF_FACTOR
-)
+from src.config.settings import settings
 from src.utils.api_keys_service import get_huggingface_token
 
 logger = logging.getLogger(__name__)
@@ -39,10 +34,10 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
                      "text": "Error: HuggingFace API key is missing. Please provide your API key at /api-keys/huggingface"}]
 
         # Always use a valid model ID - fall back to the default if none provided
-        selected_model = model_id if model_id else DEFAULT_STT_MODEL_ID
+        selected_model = model_id if model_id else settings.DEFAULT_STT_MODEL_ID
 
         # Construct the full API URL with the selected model
-        api_url = f"{HUGGINGFACE_API_URL}/{selected_model}"
+        api_url = f"{settings.HUGGINGFACE_API_URL}/{selected_model}"
 
         logger.info(f"Processing audio with model {selected_model} (content type: {content_type})")
 
@@ -52,9 +47,9 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
         }
 
         # Try multiple times with exponential backoff
-        for attempt in range(SPEECH_RECOGNITION_RETRIES):
+        for attempt in range(settings.SPEECH_RECOGNITION_RETRIES):
             try:
-                logger.info(f"Attempt {attempt + 1}/{SPEECH_RECOGNITION_RETRIES}")
+                logger.info(f"Attempt {attempt + 1}/{settings.SPEECH_RECOGNITION_RETRIES}")
 
                 # Use a longer timeout for the first attempt (model loading)
                 timeout = 30.0 if attempt == 0 else 15.0
@@ -91,7 +86,7 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
                     else:
                         logger.warning(f"API returned success but with failure message: {text}")
                         # This is likely a loading issue, so wait longer and retry
-                        wait_time = max(3, (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
+                        wait_time = max(3, (settings.SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
                         logger.info(f"Waiting {wait_time}s before retrying...")
                         time.sleep(wait_time)
                         continue
@@ -104,7 +99,7 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
 
                 elif response.status_code == 503:
                     # Service unavailable, likely model loading
-                    wait_time = max(5, (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
+                    wait_time = max(5, (settings.SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2)
                     logger.warning(f"API returned 503, model likely loading. Retry in {wait_time}s...")
                     time.sleep(wait_time)
                     continue
@@ -118,7 +113,7 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
                         logger.info("First attempt returned error - retrying anyway...")
                         time.sleep(3)
                         continue
-                    elif attempt < SPEECH_RECOGNITION_RETRIES - 1:
+                    elif attempt < settings.SPEECH_RECOGNITION_RETRIES - 1:
                         time.sleep(2)
                         continue
                     else:
@@ -128,9 +123,9 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
                     # Other error
                     logger.error(f"API error: {response.status_code} - {response.text}")
 
-                    if attempt < SPEECH_RECOGNITION_RETRIES - 1:
+                    if attempt < settings.SPEECH_RECOGNITION_RETRIES - 1:
                         # Wait longer before retrying
-                        wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 1.5 + 1
+                        wait_time = (settings.SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 1.5 + 1
                         logger.info(f"Retrying in {wait_time} seconds...")
                         time.sleep(wait_time)
                     else:
@@ -140,8 +135,8 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
             except requests.exceptions.Timeout:
                 logger.warning(f"Request timeout on attempt {attempt + 1}")
                 # For timeouts, use longer delays
-                wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2 + 3
-                if attempt < SPEECH_RECOGNITION_RETRIES - 1:
+                wait_time = (settings.SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) * 2 + 3
+                if attempt < settings.SPEECH_RECOGNITION_RETRIES - 1:
                     logger.info(f"Retrying in {wait_time} seconds after timeout...")
                     time.sleep(wait_time)
                 else:
@@ -150,9 +145,9 @@ def process_audio_file(audio_content, content_type, model_id=None, force_split=F
             except Exception as e:
                 logger.error(f"Error in processing attempt {attempt + 1}: {str(e)}")
 
-                if attempt < SPEECH_RECOGNITION_RETRIES - 1:
+                if attempt < settings.SPEECH_RECOGNITION_RETRIES - 1:
                     # Try again with increased delay
-                    wait_time = (SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) + 2
+                    wait_time = (settings.SPEECH_RECOGNITION_BACKOFF_FACTOR ** attempt) + 2
                     logger.info(f"Retrying in {wait_time} seconds...")
                     time.sleep(wait_time)
                 else:
@@ -203,14 +198,14 @@ async def warm_up_inference_api():
             logger.warning("Cannot warm up HuggingFace API: No API token available")
             return
 
-        logger.info(f"Warming up Hugging Face Inference API for model: {DEFAULT_STT_MODEL_ID}")
+        logger.info(f"Warming up Hugging Face Inference API for model: {settings.DEFAULT_STT_MODEL_ID}")
 
         # Generate a tiny audio file (0.5 seconds of silence)
         import numpy as np
         from io import BytesIO
         import wave
 
-        sample_rate = 16000
+        sample_rate = settings.AUDIO_SAMPLE_RATE
         duration = 0.5
         samples = np.zeros(int(sample_rate * duration), dtype=np.int16)
 
@@ -224,7 +219,7 @@ async def warm_up_inference_api():
         audio_content = buffer.getvalue()
 
         # Send warm-up request
-        api_url = f"{HUGGINGFACE_API_URL}/{DEFAULT_STT_MODEL_ID}"
+        api_url = f"{settings.HUGGINGFACE_API_URL}/{settings.DEFAULT_STT_MODEL_ID}"
         headers = {
             "Authorization": f"Bearer {huggingface_token}",
             "Content-Type": "audio/wav",

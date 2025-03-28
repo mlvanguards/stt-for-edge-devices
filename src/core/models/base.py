@@ -3,7 +3,6 @@ from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
 from bson import ObjectId
 
 
-# Helper for handling ObjectId
 def validate_object_id(v) -> ObjectId:
     """Validate and convert to ObjectId"""
     if isinstance(v, ObjectId):
@@ -26,13 +25,3 @@ class MongoBaseModel(BaseModel):
         arbitrary_types_allowed=True,
         json_encoders={ObjectId: str}
     )
-
-
-class TTSSettings(BaseModel):
-    """Text-to-speech settings"""
-    voice_id: str
-    model_id: str = "eleven_turbo_v2"
-    stability: float = 0.5
-    similarity_boost: float = 0.75
-    style: float = 0.0
-    use_speaker_boost: bool = True

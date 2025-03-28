@@ -2,9 +2,9 @@ import logging
 from fastapi import APIRouter, HTTPException, Body, status
 from typing import Dict, Any
 
+from src.config.settings import settings
 from src.core.speech.tts import synthesize_speech, get_available_voices
-from src.models.conversation import TTSResponse
-from src.config.settings import DEFAULT_VOICE_ID
+from src.models.responses import TTSResponse
 
 router = APIRouter(tags=["text-to-speech"])
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ async def text_to_speech_only(data: Dict[str, Any] = Body(...)):
     - **voice_id**: Optional voice ID to use (defaults to system default)
     """
     text = data.get("text")
-    voice_id = data.get("voice_id", DEFAULT_VOICE_ID)
+    voice_id = data.get("voice_id", settings.DEFAULT_VOICE_ID)
 
     if not text:
         raise HTTPException(

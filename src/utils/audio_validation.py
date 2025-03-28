@@ -1,10 +1,7 @@
 import io
 import logging
 from pydub import AudioSegment
-from src.config.settings import (
-    ALLOWED_AUDIO_CONTENT_TYPES,
-    AUDIO_SEGMENT_DURATION
-)
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +22,7 @@ def check_ffmpeg():
 
 def validate_content_type(content_type):
     """Validate file content type"""
-    return content_type in ALLOWED_AUDIO_CONTENT_TYPES
+    return content_type in settings.ALLOWED_AUDIO_CONTENT_TYPES
 
 
 def get_audio_format(content_type):
@@ -50,29 +47,33 @@ def optimize_audio_for_stt(audio_content, content_type):
         audio = AudioSegment.from_file(io.BytesIO(audio_content), format=audio_format)
 
         # Optimize: Convert to mono, set sample rate to 16kHz
-        optimized = audio.set_channels(1).set_frame_rate(16000)
+        optimized = audio.set_channels(settings.AUDIO_CHANNELS).set_frame_rate(settings.AUDIO_SAMPLE_RATE)
 
         # Export to WAV format
         buffer = io.BytesIO()
-        optimized.export(buffer, format="wav")
+        optimized.export(buffer, format=settings.AUDIO_FORMAT)
         return buffer.getvalue()
     except Exception as e:
         logger.error(f"Error optimizing audio: {str(e)}")
         return None
 
 
-def split_audio_file(audio_content, content_type, segment_duration=AUDIO_SEGMENT_DURATION):
+def split_audio_file(audio_content, content_type, segment_duration=None):
     """
     Split audio into segments using pydub
     Returns a list of audio segment bytes
     """
+    # Use settings value or default
+    if segment_duration is None:
+        segment_duration = settings.AUDIO_SEGMENT_DURATION
+
     try:
         # Load audio from bytes
         audio_format = get_audio_format(content_type)
         audio = AudioSegment.from_file(io.BytesIO(audio_content), format=audio_format)
 
         # Optimize audio first
-        audio = audio.set_channels(1).set_frame_rate(16000)
+        audio = audio.set_channels(settings.AUDIO_CHANNELS).set_frame_rate(settings.AUDIO_SAMPLE_RATE)
 
         # Split the audio into segments
         segment_length_ms = segment_duration * 1000
@@ -84,7 +85,7 @@ def split_audio_file(audio_content, content_type, segment_duration=AUDIO_SEGMENT
 
             # Export to WAV format
             buffer = io.BytesIO()
-            segment.export(buffer, format="wav")
+            segment.export(buffer, format=settings.AUDIO_FORMAT)
 
             segments.append({
                 "index": i,

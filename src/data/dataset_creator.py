@@ -1,14 +1,13 @@
 from datasets import Dataset, DatasetDict, Audio
 import os
 import json
-from src.data_config.config import Config
 
 class DatasetCreator:
     @staticmethod
     def create_dataset(
             data_dir: str,
             audio_dir: str,
-            config: Config
+            config = None
     ) -> DatasetDict:
         """Create HuggingFace dataset from processed data."""
         splits = ['train', 'validation', 'test']
@@ -19,7 +18,6 @@ class DatasetCreator:
             with open(json_path, 'r', encoding='utf-8') as f:
                 entries = json.load(f)
 
-            # Add full path to audio files (now using the correct subdirectory)
             for entry in entries:
                 entry['audio'] = os.path.join(audio_dir, entry['file_name'])
 
@@ -35,10 +33,9 @@ class DatasetCreator:
         return DatasetDict(data)
 
 def main():
-    config = Config()
     data_dir = "split_data"
     audio_dir = "dataset_kaggle/output"
-    dataset_dict = DatasetCreator.create_dataset(data_dir, audio_dir, config)
+    dataset_dict = DatasetCreator.create_dataset(data_dir, audio_dir)
     dataset_dict.push_to_hub("StefanStefan/STT-test")
 
 if __name__ == "__main__":

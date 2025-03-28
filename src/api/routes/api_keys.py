@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, status
 from typing import Optional
-from src.models.conversation import ApiKeySubmission, ApiKeyInfo, ApiKeyDetailsResponse
+from src.models.api import ApiKeySubmission, ApiKeyInfo, ApiKeyDetailsResponse
 
 # Setup logger
 logger = logging.getLogger(__name__)

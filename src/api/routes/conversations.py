@@ -2,13 +2,10 @@ import uuid
 import logging
 from fastapi import APIRouter, HTTPException, status
 
+from src.config.settings import settings
 from src.core.database import MongoDB
-from src.models.conversation import (
-    ConversationCreate,
-    ConversationResponse,
-    ConversationListResponse
-)
-from src.config.settings import DEFAULT_VOICE_ID
+from src.models.requests import ConversationCreate
+from src.models.responses import ConversationResponse, ConversationListResponse
 
 router = APIRouter(tags=["conversations"])
 logger = logging.getLogger(__name__)
@@ -22,7 +19,7 @@ async def create_conversation(data: ConversationCreate):
     try:
         # Generate a unique ID for the conversation
         conversation_id = str(uuid.uuid4())
-        voice_id = data.voice_id if data.voice_id else DEFAULT_VOICE_ID
+        voice_id = data.voice_id if data.voice_id else settings.DEFAULT_VOICE_ID
 
         # Create the conversation in the database
         await MongoDB.create_conversation(conversation_id, data.system_prompt, voice_id)
@@ -70,7 +67,7 @@ async def get_conversation_history(conversation_id: str):
         return {
             "conversation_id": conversation_id,
             "system_prompt": conversation["system_prompt"],
-            "voice_id": conversation.get("voice_id", DEFAULT_VOICE_ID),
+            "voice_id": conversation.get("voice_id", settings.DEFAULT_VOICE_ID),
             "messages": formatted_messages
         }
     except HTTPException:
@@ -133,7 +130,7 @@ async def list_conversations(limit: int = 10, skip: int = 0):
             formatted_conversations.append({
                 "conversation_id": conv["conversation_id"],
                 "system_prompt": conv["system_prompt"],
-                "voice_id": conv.get("voice_id", DEFAULT_VOICE_ID),
+                "voice_id": conv.get("voice_id", settings.DEFAULT_VOICE_ID),
                 "created_at": conv["created_at"],
                 "last_updated": conv["last_updated"]
             })

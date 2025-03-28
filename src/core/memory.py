@@ -2,12 +2,7 @@ import logging
 from typing import List, Dict, Any
 import requests
 
-from src.config.settings import (
-    OPENAI_API_KEY,
-    OPENAI_API_URL,
-    MEMORY_MAX_MESSAGES,
-    MEMORY_SUMMARIZE_THRESHOLD
-)
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +15,8 @@ class ConversationMemory:
 
     def __init__(self):
         """Initialize the memory manager"""
-        self.max_messages = MEMORY_MAX_MESSAGES
-        self.summarize_threshold = MEMORY_SUMMARIZE_THRESHOLD
+        self.max_messages = settings.MEMORY_MAX_MESSAGES
+        self.summarize_threshold = settings.MEMORY_SUMMARIZE_THRESHOLD
 
     def optimize_conversation_history(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -48,7 +43,7 @@ class ConversationMemory:
             return system_messages + conversation
 
         split_point = max(0,
-                          len(conversation) - MEMORY_MAX_MESSAGES + 2)  # Keep n-2 recent messages (leave room for summary)
+                          len(conversation) - self.max_messages + 2)  # Keep n-2 recent messages (leave room for summary)
         older_messages = conversation[:split_point]
         recent_messages = conversation[split_point:]
 
@@ -78,7 +73,10 @@ class ConversationMemory:
         Returns:
             A string summary of the conversation
         """
-        if not OPENAI_API_KEY:
+        # Get OpenAI API key from settings
+        openai_api_key = settings.OPENAI_API_KEY
+
+        if not openai_api_key:
             logger.error("Cannot summarize: OpenAI API key not configured")
             return ""
 
@@ -100,12 +98,12 @@ class ConversationMemory:
 
             # Call the OpenAI API
             headers = {
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Authorization": f"Bearer {openai_api_key}",
                 "Content-Type": "application/json"
             }
 
             data = {
-                "model": "gpt-4o",
+                "model": settings.GPT_MODEL,
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant that summarizes conversations."},
                     {"role": "user", "content": summarization_prompt}
@@ -114,7 +112,7 @@ class ConversationMemory:
                 "temperature": 0.3
             }
 
-            response = requests.post(OPENAI_API_URL, headers=headers, json=data)
+            response = requests.post(settings.OPENAI_API_URL, headers=headers, json=data)
             response.raise_for_status()
 
             result = response.json()
