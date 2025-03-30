@@ -1,17 +1,22 @@
-import uuid
 import logging
+import uuid
+
 from fastapi import APIRouter, HTTPException, status
 
 from src.config.settings import settings
 from src.core.database import MongoDB
 from src.models.requests import ConversationCreate
-from src.models.responses import ConversationResponse, ConversationListResponse
+from src.models.responses import ConversationListResponse, ConversationResponse
 
 router = APIRouter(tags=["conversations"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/create_conversation", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/create_conversation",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_conversation(data: ConversationCreate):
     """
     Create a new conversation with a system prompt and voice selection
@@ -19,7 +24,7 @@ async def create_conversation(data: ConversationCreate):
     try:
         # Generate a unique ID for the conversation
         conversation_id = str(uuid.uuid4())
-        voice_id = data.voice_id if data.voice_id else settings.DEFAULT_VOICE_ID
+        voice_id = data.voice_id if data.voice_id else settings.tts.DEFAULT_VOICE_ID
 
         # Create the conversation in the database
         await MongoDB.create_conversation(conversation_id, data.system_prompt, voice_id)
@@ -28,13 +33,13 @@ async def create_conversation(data: ConversationCreate):
             "conversation_id": conversation_id,
             "system_prompt": data.system_prompt,
             "voice_id": voice_id,
-            "messages": []
+            "messages": [],
         }
     except Exception as e:
         logger.error(f"Error creating conversation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating conversation: {str(e)}"
+            detail=f"Error creating conversation: {str(e)}",
         )
 
 
@@ -49,7 +54,7 @@ async def get_conversation_history(conversation_id: str):
         if not conversation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Conversation {conversation_id} not found"
+                detail=f"Conversation {conversation_id} not found",
             )
 
         # Get the messages for the conversation
@@ -58,17 +63,18 @@ async def get_conversation_history(conversation_id: str):
         # Format messages for response (exclude system messages)
         formatted_messages = []
         for message in messages:
-            if message["role"] != "system":  # Skip system messages in the returned history
-                formatted_messages.append({
-                    "role": message["role"],
-                    "content": message["content"]
-                })
+            if (
+                message["role"] != "system"
+            ):  # Skip system messages in the returned history
+                formatted_messages.append(
+                    {"role": message["role"], "content": message["content"]}
+                )
 
         return {
             "conversation_id": conversation_id,
             "system_prompt": conversation["system_prompt"],
-            "voice_id": conversation.get("voice_id", settings.DEFAULT_VOICE_ID),
-            "messages": formatted_messages
+            "voice_id": conversation.get("voice_id", settings.tts.DEFAULT_VOICE_ID),
+            "messages": formatted_messages,
         }
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -77,7 +83,7 @@ async def get_conversation_history(conversation_id: str):
         logger.error(f"Error getting conversation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting conversation: {str(e)}"
+            detail=f"Error getting conversation: {str(e)}",
         )
 
 
@@ -92,7 +98,7 @@ async def delete_conversation(conversation_id: str):
         if not conversation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Conversation {conversation_id} not found"
+                detail=f"Conversation {conversation_id} not found",
             )
 
         # Delete the conversation and its messages
@@ -100,7 +106,7 @@ async def delete_conversation(conversation_id: str):
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to delete conversation {conversation_id}"
+                detail=f"Failed to delete conversation {conversation_id}",
             )
 
         return {"message": f"Conversation {conversation_id} deleted successfully"}
@@ -111,7 +117,7 @@ async def delete_conversation(conversation_id: str):
         logger.error(f"Error deleting conversation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting conversation: {str(e)}"
+            detail=f"Error deleting conversation: {str(e)}",
         )
 
 
@@ -127,24 +133,26 @@ async def list_conversations(limit: int = 10, skip: int = 0):
         # Format the conversations for the response
         formatted_conversations = []
         for conv in result["conversations"]:
-            formatted_conversations.append({
-                "conversation_id": conv["conversation_id"],
-                "system_prompt": conv["system_prompt"],
-                "voice_id": conv.get("voice_id", settings.DEFAULT_VOICE_ID),
-                "created_at": conv["created_at"],
-                "last_updated": conv["last_updated"]
-            })
+            formatted_conversations.append(
+                {
+                    "conversation_id": conv["conversation_id"],
+                    "system_prompt": conv["system_prompt"],
+                    "voice_id": conv.get("voice_id", settings.tts.DEFAULT_VOICE_ID),
+                    "created_at": conv["created_at"],
+                    "last_updated": conv["last_updated"],
+                }
+            )
 
         return {
             "total": result["total"],
             "conversations": formatted_conversations,
             "page": result["page"],
             "limit": result["limit"],
-            "pages": result["pages"]
+            "pages": result["pages"],
         }
     except Exception as e:
         logger.error(f"Error listing conversations: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing conversations: {str(e)}"
+            detail=f"Error listing conversations: {str(e)}",
         )

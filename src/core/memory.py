@@ -1,5 +1,6 @@
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import requests
 
 from src.config.settings import settings
@@ -15,10 +16,12 @@ class ConversationMemory:
 
     def __init__(self):
         """Initialize the memory manager"""
-        self.max_messages = settings.MEMORY_MAX_MESSAGES
-        self.summarize_threshold = settings.MEMORY_SUMMARIZE_THRESHOLD
+        self.max_messages = settings.memory.MEMORY_MAX_MESSAGES
+        self.summarize_threshold = settings.memory.MEMORY_SUMMARIZE_THRESHOLD
 
-    def optimize_conversation_history(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def optimize_conversation_history(
+        self, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Optimize the conversation history for the LLM by:
         1. Keeping system messages
@@ -42,8 +45,9 @@ class ConversationMemory:
         if len(conversation) <= self.max_messages:
             return system_messages + conversation
 
-        split_point = max(0,
-                          len(conversation) - self.max_messages + 2)  # Keep n-2 recent messages (leave room for summary)
+        split_point = max(
+            0, len(conversation) - self.max_messages + 2
+        )  # Keep n-2 recent messages (leave room for summary)
         older_messages = conversation[:split_point]
         recent_messages = conversation[split_point:]
 
@@ -56,7 +60,7 @@ class ConversationMemory:
             if summary:
                 summary_message = {
                     "role": "system",
-                    "content": f"Previous conversation summary: {summary}"
+                    "content": f"Previous conversation summary: {summary}",
                 }
                 return system_messages + [summary_message] + recent_messages
 
@@ -74,7 +78,7 @@ class ConversationMemory:
             A string summary of the conversation
         """
         # Get OpenAI API key from settings
-        openai_api_key = settings.OPENAI_API_KEY
+        openai_api_key = settings.openai.OPENAI_API_KEY
 
         if not openai_api_key:
             logger.error("Cannot summarize: OpenAI API key not configured")
@@ -99,20 +103,25 @@ class ConversationMemory:
             # Call the OpenAI API
             headers = {
                 "Authorization": f"Bearer {openai_api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             data = {
-                "model": settings.GPT_MODEL,
+                "model": settings.openai.GPT_MODEL,
                 "messages": [
-                    {"role": "system", "content": "You are a helpful assistant that summarizes conversations."},
-                    {"role": "user", "content": summarization_prompt}
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that summarizes conversations.",
+                    },
+                    {"role": "user", "content": summarization_prompt},
                 ],
                 "max_tokens": 200,
-                "temperature": 0.3
+                "temperature": 0.3,
             }
 
-            response = requests.post(settings.OPENAI_API_URL, headers=headers, json=data)
+            response = requests.post(
+                settings.openai.OPENAI_API_URL, headers=headers, json=data
+            )
             response.raise_for_status()
 
             result = response.json()

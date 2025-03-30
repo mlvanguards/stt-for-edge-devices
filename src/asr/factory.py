@@ -1,4 +1,4 @@
-from src.asr.interfaces import ASRModelInterface
+from src.asr.base import ASRModelInterface
 from src.asr.speech_brain import SpeechBrainASR
 from src.config import settings
 
