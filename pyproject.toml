@@ -7,7 +7,6 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-speechbrain = "^1.0.2"
 torchaudio = "^2.5.1"
 soundfile = "^0.12.1"
 torch = "^2.5.1"
@@ -30,6 +29,7 @@ pydub = "^0.25.1"
 gitingest = "^0.1.4"
 prettytable = "^3.15.1"
 pydantic-settings = "^2.8.1"
+speechbrain = "^1.0.2"
 
 
 [build-system]
