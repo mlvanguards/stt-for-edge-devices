@@ -85,7 +85,8 @@ class MemorySettings(BaseAppSettings):
 
     MEMORY_ENABLED: bool = True
     MEMORY_MAX_MESSAGES: int = 15
-    MEMORY_SUMMARIZE_THRESHOLD: int = 5
+    MEMORY_SUMMARIZE_THRESHOLD: int = 5  # Number of messages before summarization
+    MEMORY_SUMMARY_UPDATE_INTERVAL: int = 10  # Update summary every N messages
 
 
 class TTSSettings(BaseAppSettings):

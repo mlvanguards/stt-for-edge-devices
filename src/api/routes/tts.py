@@ -5,7 +5,7 @@ from fastapi import APIRouter, Body, HTTPException, status
 
 from src.config.settings import settings
 from src.models.responses import TTSResponse
-from src.services.tts import TextToSpeechService
+from src.services.service_container import services
 
 router = APIRouter(tags=["text-to-speech"])
 logger = logging.getLogger(__name__)
@@ -19,9 +19,11 @@ async def text_to_speech_only(data: Dict[str, Any] = Body(...)):
     - **text**: Text to convert to speech
     - **voice_id**: Optional voice ID to use (defaults to system default)
     """
-    tts_service = TextToSpeechService()
+    tts_service = services.get("tts_service")
+
     text = data.get("text")
     voice_id = data.get("voice_id", settings.tts.DEFAULT_VOICE_ID)
+    conversation_id = data.get("conversation_id")  # Optional
 
     if not text:
         raise HTTPException(
@@ -29,15 +31,22 @@ async def text_to_speech_only(data: Dict[str, Any] = Body(...)):
         )
 
     try:
-        success, result, audio_base64 = tts_service.synthesize_speech(text, voice_id)
+        result = await tts_service.synthesize_speech(
+            text=text,
+            voice_id=voice_id,
+            conversation_id=conversation_id
+        )
 
-        if not success:
+        if not result["success"] or "audio_base64" not in result:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=result,  # This will be the error message
+                detail=result.get("error", "Failed to generate speech"),
             )
 
-        return {"audio_base64": audio_base64}
+        return {"audio_base64": result["audio_base64"]}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Error generating speech: {str(e)}")
         raise HTTPException(
@@ -51,7 +60,8 @@ async def available_voices():
     """
     Get a list of available voices from ElevenLabs
     """
-    tts_service = TextToSpeechService()
+    tts_service = services.get("tts_service")
+
     try:
         result = await tts_service.get_available_voices()
 
@@ -70,4 +80,38 @@ async def available_voices():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching voices: {str(e)}",
+        )
+
+
+@router.get("/audio/{audio_id}")
+async def get_audio(audio_id: str):
+    """
+    Get previously generated audio by ID
+
+    - **audio_id**: ID of the stored audio file
+    """
+    tts_service = services.get("tts_service")
+
+    try:
+        audio_content, content_type = await tts_service.get_audio_by_id(audio_id)
+
+        if not audio_content or not content_type:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Audio file {audio_id} not found",
+            )
+
+        from fastapi.responses import Response
+        return Response(
+            content=audio_content,
+            media_type=content_type
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving audio: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving audio: {str(e)}",
         )

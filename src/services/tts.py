@@ -1,227 +1,162 @@
-import base64
 import logging
-import uuid
-from typing import Optional, Tuple
-
-import requests
+import base64
+from typing import Dict, Optional, Any, Tuple
 
 from src.config.settings import settings
+from src.core.interfaces.service import ITextToSpeechService
+from src.core.interfaces.repository import IAudioRepository
+from src.core.interfaces.service import IExternalAPIClient
+from src.core.utils.audio.audio_handling import AudioProcessor
 
 logger = logging.getLogger(__name__)
 
 
-class TextToSpeechService:
-    """Service class for handling text-to-speech operations."""
+class TextToSpeechService(ITextToSpeechService):
+    """
+    Service for handling text-to-speech operations.
+    Implements the ITextToSpeechService interface.
+    Uses the centralized AudioProcessor for audio processing needs.
+    """
 
-    def __init__(self):
-        self.api_url = settings.tts.ELEVENLABS_API_URL
+    def __init__(
+            self,
+            external_api_client: IExternalAPIClient,
+            audio_repository: IAudioRepository,
+            audio_processor: Optional[AudioProcessor] = None
+    ):
+        """
+        Initialize with dependencies.
+
+        Args:
+            external_api_client: Client for API interactions
+            audio_repository: Repository for audio storage
+            audio_processor: Optional AudioProcessor instance
+        """
+        self.external_api_client = external_api_client
+        self.audio_repository = audio_repository
+        self.audio_processor = audio_processor or AudioProcessor()
         self.default_voice_id = settings.tts.DEFAULT_VOICE_ID
         self.tts_model_id = settings.tts.TTS_MODEL_ID
-        self.default_settings = settings.tts.TTS_DEFAULT_SETTINGS
+        self.voice_cache = None
+        self.voice_cache_timestamp = None
 
-    def synthesize_speech(
-        self, text: str, voice_id: str = None
-    ) -> Tuple[bool, str, Optional[str]]:
+    async def synthesize_speech(
+            self, text: str, voice_id: Optional[str] = None,
+            conversation_id: Optional[str] = None,
+            return_base64: bool = True
+    ) -> Dict[str, Any]:
         """
-        Convert text to speech using ElevenLabs API.
-        Requires user-provided API key.
+        Convert text to speech using ElevenLabs API and store the result.
 
         Args:
             text: The text to convert to speech
-            voice_id: Optional voice ID to use (defaults to system default)
+            voice_id: Optional voice ID to use
+            conversation_id: Optional conversation ID to associate with
+            return_base64: Whether to return the audio as base64 encoded string
 
         Returns:
-            Tuple of (success, message, optional base64 encoded audio)
+            Dict with success status, file ID, audio data, and any error message
         """
         # Use default voice ID if none provided
         if voice_id is None:
             voice_id = self.default_voice_id
 
-        # Get the API key (user-provided only)
-        elevenlabs_api_key = settings.auth.ELEVENLABS_API_KEY
-
-        if not elevenlabs_api_key:
-            logger.error(
-                "ElevenLabs API key not available. User must provide an API key."
-            )
-            return (
-                False,
-                "ElevenLabs API key is missing. Please provide your API key at /api-keys/elevenlabs",
-                None,
-            )
-
-        if not text:
-            logger.error("No text provided for speech synthesis")
-            return False, "No text provided for speech synthesis", None
-
-        headers = {"xi-api-key": elevenlabs_api_key, "Content-Type": "application/json"}
-
-        payload = {
-            "text": text,
-            "model_id": self.tts_model_id,
-            "voice_settings": self.default_settings,
-        }
-
-        url = f"{self.api_url}/{voice_id}"
-
-        try:
-            response = requests.post(url, json=payload, headers=headers)
-
-            if response.status_code == 401:
-                logger.error(
-                    "Authentication failed with ElevenLabs API. Please check your API key."
-                )
-                return (
-                    False,
-                    "Invalid ElevenLabs API key. Please provide a valid API key at /api-keys/elevenlabs",
-                    None,
-                )
-
-            response.raise_for_status()
-
-            # Generate a unique identifier for the audio
-            file_id = str(uuid.uuid4())
-
-            # Convert to base64 for API response
-            audio_base64 = base64.b64encode(response.content).decode("utf-8")
-
-            # Return a virtual path identifier and the base64 content
-            return True, f"audio:{file_id}.mp3", audio_base64
-
-        except requests.exceptions.RequestException as e:
-            error_message = f"Error generating speech with ElevenLabs: {str(e)}"
-            if hasattr(e, "response") and e.response is not None:
-                error_message += f" Response: {e.response.text}"
-            logger.error(error_message)
-            return False, error_message, None
-        except Exception as e:
-            error_message = f"Error generating speech: {str(e)}"
-            logger.error(error_message)
-            return False, error_message, None
-
-    async def get_available_voices(self):
-        """
-        Get a list of available voices from ElevenLabs.
-        Requires user-provided API key.
-
-        Returns:
-            Dictionary with success status and either voices list or error message
-        """
-        # Get the API key (user-provided only)
-        elevenlabs_api_key = settings.auth.ELEVENLABS_API_KEY
-
-        if not elevenlabs_api_key:
-            logger.error(
-                "ElevenLabs API key not available. User must provide an API key."
-            )
-            return {
-                "success": False,
-                "error": "ElevenLabs API key is missing. Please provide your API key at /api-keys/elevenlabs",
-            }
-
-        headers = {"xi-api-key": elevenlabs_api_key}
-
-        try:
-            response = requests.get(
-                "https://api.elevenlabs.io/v1/voices", headers=headers
-            )
-
-            if response.status_code == 401:
-                logger.error(
-                    "Authentication failed with ElevenLabs API. Please check your API key."
-                )
-                return {
-                    "success": False,
-                    "error": "Invalid ElevenLabs API key. Please provide a valid API key at /api-keys/elevenlabs",
-                }
-
-            response.raise_for_status()
-
-            voices_data = response.json()
-
-            # Format the voice data for the API response
-            voices = [
-                {
-                    "voice_id": voice["voice_id"],
-                    "name": voice["name"],
-                    "preview_url": voice.get("preview_url", None),
-                    "category": voice.get("category", "premium"),
-                }
-                for voice in voices_data.get("voices", [])
-            ]
-
-            return {"success": True, "voices": voices}
-        except requests.exceptions.RequestException as e:
-            error_message = f"Error fetching voices from ElevenLabs: {str(e)}"
-            logger.error(error_message)
-            return {"success": False, "error": error_message}
-
-
-# Create a singleton instance of the service
-text_to_speech_service = TextToSpeechService()
-
-
-# Provide backward compatibility functions that delegate to the service
-def synthesize_speech(
-    text: str, voice_id: str = None
-) -> Tuple[bool, str, Optional[str]]:
-    """Backward compatibility function that delegates to the service."""
-    return text_to_speech_service.synthesize_speech(text, voice_id)
-
-
-async def get_available_voices():
-    """Backward compatibility function that delegates to the service."""
-    return await text_to_speech_service.get_available_voices()
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    async def test_tts_service():
-        print("Testing Text-to-Speech Service")
-        print("==============================")
-
-        # Test voice listing
-        print("\n1. Testing voice listing...")
-        voices_result = await text_to_speech_service.get_available_voices()
-
-        if voices_result["success"]:
-            print(f"Successfully retrieved {len(voices_result['voices'])} voices")
-            print("First 3 voices:")
-            for voice in voices_result["voices"][:3]:
-                print(
-                    f"  - {voice['name']} (ID: {voice['voice_id']}, Category: {voice['category']})"
-                )
-        else:
-            print(
-                f"Failed to retrieve voices: {voices_result.get('error', 'Unknown error')}"
-            )
-
-        # Test speech synthesis
-        print("\n2. Testing speech synthesis...")
-        test_text = "Hello, this is a test of the text to speech service."
-
-        success, message, audio_base64 = text_to_speech_service.synthesize_speech(
-            test_text
+        # Call ElevenLabs API through the external client
+        result = await self.external_api_client.call_elevenlabs_api(
+            text=text,
+            voice_id=voice_id,
+            model_id=self.tts_model_id
         )
 
-        if success:
-            print(f"Successfully synthesized speech: {message}")
-            print(
-                f"Audio data length: {len(audio_base64) if audio_base64 else 0} characters"
+        if not result["success"]:
+            logger.error(f"Failed to generate speech: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error in speech synthesis"),
+                "audio_base64": None,
+                "file_id": None
+            }
+
+        try:
+            # Get audio duration if possible
+            audio_duration = None
+            try:
+                audio_content = result["audio_content"]
+                audio_duration = self.audio_processor.get_audio_duration(audio_content)
+                logger.info(f"Generated speech audio with duration: {audio_duration:.2f}s")
+            except Exception as e:
+                logger.warning(f"Could not determine audio duration: {str(e)}")
+
+            # Store audio in repository
+            file_id = await self.audio_repository.save_audio(
+                audio_content=result["audio_content"],
+                content_type="audio/mpeg",  # ElevenLabs returns MP3
+                conversation_id=conversation_id,
+                ttl_hours=24  # Default TTL
             )
 
-            # Optionally save the audio to a file for testing
-            if audio_base64:
-                try:
-                    audio_data = base64.b64decode(audio_base64)
-                    with open("test_tts_output.mp3", "wb") as f:
-                        f.write(audio_data)
-                    print("Saved audio to test_tts_output.mp3")
-                except Exception as e:
-                    print(f"Error saving audio file: {str(e)}")
-        else:
-            print(f"Failed to synthesize speech: {message}")
+            # Return result
+            response = {
+                "success": True,
+                "file_id": file_id,
+                "error": None,
+                "duration": audio_duration
+            }
 
-    # Run the test
-    asyncio.run(test_tts_service())
+            # Add base64 encoded audio if requested
+            if return_base64:
+                audio_base64 = base64.b64encode(result["audio_content"]).decode("utf-8")
+                response["audio_base64"] = audio_base64
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error storing synthesized speech: {str(e)}")
+            # Still return the audio even if storage failed
+            if return_base64:
+                audio_base64 = base64.b64encode(result["audio_content"]).decode("utf-8")
+                return {
+                    "success": True,
+                    "audio_base64": audio_base64,
+                    "file_id": None,
+                    "error": f"Storage error: {str(e)}"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Storage error: {str(e)}",
+                    "audio_base64": None,
+                    "file_id": None
+                }
+
+    async def get_audio_by_id(self, file_id: str) -> Tuple[Optional[bytes], Optional[str]]:
+        """
+        Retrieve previously synthesized audio by ID.
+
+        Args:
+            file_id: The audio file ID
+
+        Returns:
+            Tuple of (audio_content, content_type) if found, (None, None) otherwise
+        """
+        return await self.audio_repository.get_audio(file_id)
+
+    async def get_available_voices(self) -> Dict[str, Any]:
+        """
+        Get a list of available voices from ElevenLabs.
+
+        Returns:
+            Dict with success status and voices list or error message
+        """
+        # Check cache first (could add a timestamp check for freshness)
+        if self.voice_cache is not None:
+            return self.voice_cache
+
+        # Call ElevenLabs API
+        result = await self.external_api_client.get_elevenlabs_voices()
+
+        # Cache the result if successful
+        if result.get("success", False):
+            self.voice_cache = result
+
+        return result

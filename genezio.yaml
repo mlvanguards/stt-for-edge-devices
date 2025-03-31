@@ -13,7 +13,7 @@ backend:
       - name: fastapi
         path: .
         handler: app
-        entry: src/api/main.py
+        entry: src/api/automatic_transcription.py
         env:
           HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN}
           OPENAI_API_KEY: ${OPENAI_API_KEY}

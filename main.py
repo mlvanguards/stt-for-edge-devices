@@ -78,7 +78,7 @@ async def startup_event():
             logging.info(f"Found MONGODB_URI: {masked_uri}")
 
         # Initialize MongoDB connection
-        from src.core.database import MongoDB
+        from src.database.mongo import MongoDB
 
         connected = await MongoDB.connect()
 

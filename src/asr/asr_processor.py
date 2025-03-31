@@ -1,18 +1,39 @@
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from src.asr.base import ASRModelInterface
 from src.asr.speech_brain import SpeechBrainASR
-from src.core.utils.audio.audio_handling import AudioUtils
+from src.core.utils.audio.audio_handling import AudioProcessor
 
 
 class ASRProcessor:
-    def __init__(self, model: ASRModelInterface = None):
-        """Initialize the ASR processor with settings."""
+    """
+    Processor for automatic speech recognition using local models.
+    Uses the centralized AudioProcessor for all audio processing operations.
+    """
+
+    def __init__(self, model: Optional[ASRModelInterface] = None, audio_processor: Optional[AudioProcessor] = None):
+        """
+        Initialize the ASR processor with model and audio processor.
+
+        Args:
+            model: Optional ASR model implementation
+            audio_processor: Optional audio processor
+        """
         self.model = model
+        self.audio_processor = audio_processor or AudioProcessor()
+        self._loaded = False
 
     def load_model(self, device: str = "cpu") -> None:
-        """Load SpeechBrain ASR model."""
+        """
+        Load SpeechBrain ASR model. Only loads once if already loaded.
+
+        Args:
+            device: Device to load model on ('cpu' or 'cuda')
+        """
+        if self._loaded:
+            return
+
         if self.model is None:
             print("Initializing Conformer ASR model...")
             self.model = SpeechBrainASR(
@@ -21,15 +42,27 @@ class ASRProcessor:
             )
 
         self.model.load(device=device)
+        self._loaded = True
 
     def process_audio_file(self, audio_file: Path) -> Dict:
-        """Process a single audio file and return transcription."""
+        """
+        Process a single audio file and return transcription.
+
+        Args:
+            audio_file: Path to the audio file
+
+        Returns:
+            Dictionary with transcription results
+        """
         try:
-            if self.model is None:
+            if self.model is None or not self._loaded:
                 raise RuntimeError("Model not loaded. Call load_model() first.")
 
+            # Get audio duration using audio processor
+            duration = self.audio_processor.get_audio_duration(audio_file)
+
+            # Transcribe using the ASR model
             transcription = self.model.transcribe(audio_file)
-            duration = AudioUtils.get_audio_duration(audio_file)
 
             result = {
                 "file_name": audio_file.name,
@@ -49,13 +82,17 @@ class ASRProcessor:
         if self.model:
             self.model.cleanup()
 
+        # Clear memory using audio processor
+        self.audio_processor.clear_memory()
+        self._loaded = False
+
 
 if __name__ == "__main__":
     import json
 
     # Hardcoded test parameters
-    audio_file_path = "/Users/vesaalexandru/Workspaces/cube/stt-for-edge-devices/data/M18_05_01.wav"  # Replace with your test audio file path
-    device = "cpu"  # Use "cuda" if you have GPU support
+    audio_file_path = "data/M18_05_01.wav"
+    device = "cpu"
 
     # Initialize and run ASR processor
     processor = ASRProcessor()

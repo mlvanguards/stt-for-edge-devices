@@ -1,230 +1,115 @@
 import asyncio
 import logging
 import re
-import time
-import wave
-from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-import numpy as np
-import requests
-
 from src.config.settings import settings
+from src.core.interfaces.service import ISpeechRecognitionService
+from src.core.interfaces.repository import IAudioRepository
+from src.core.interfaces.service import IExternalAPIClient
+from src.core.utils.audio.audio_handling import AudioProcessor
 
 logger = logging.getLogger(__name__)
 
 
-class SpeechRecognitionService:
-    """Service class for handling speech recognition operations."""
+class SpeechRecognitionService(ISpeechRecognitionService):
+    """
+    Service for handling speech recognition operations.
+    Implements the ISpeechRecognitionService interface.
+    Uses the centralized AudioProcessor for all audio processing needs.
+    """
 
-    def __init__(self):
-        self.api_base_url = settings.stt.HUGGINGFACE_API_URL
+    def __init__(
+            self,
+            external_api_client: IExternalAPIClient,
+            audio_repository: IAudioRepository,
+            audio_processor: Optional[AudioProcessor] = None
+    ):
+        """
+        Initialize with dependencies.
+
+        Args:
+            external_api_client: Client for API interactions
+            audio_repository: Repository for audio storage
+            audio_processor: Audio processing utility
+        """
+        self.external_api_client = external_api_client
+        self.audio_repository = audio_repository
+        self.audio_processor = audio_processor or AudioProcessor()
         self.default_model_id = settings.stt.DEFAULT_STT_MODEL_ID
-        self.max_retries = settings.stt.SPEECH_RECOGNITION_RETRIES
-        self.backoff_factor = settings.stt.SPEECH_RECOGNITION_BACKOFF_FACTOR
-        self.sample_rate = settings.audio.AUDIO_SAMPLE_RATE
 
-    def process_audio_file(
-        self,
-        audio_content: bytes,
-        content_type: str,
-        model_id: Optional[str] = None,
+    async def process_audio_file(
+            self,
+            audio_content: bytes,
+            content_type: str,
+            model_id: Optional[str] = None,
+            conversation_id: Optional[str] = None,
+            store_audio: bool = True
     ) -> List[Dict[str, Any]]:
         """
-        Process an audio file by sending it directly to HuggingFace API.
-        Requires user-provided API key.
+        Process an audio file by sending it to the Hugging Face API.
 
         Args:
             audio_content: Raw audio bytes
             content_type: MIME type of the audio
-            model_id: Optional model ID to use for transcription (defaults to DEFAULT_STT_MODEL_ID)
-            force_split: Ignored parameter (kept for API compatibility)
+            model_id: Optional model ID to use (defaults to default from settings)
+            conversation_id: Optional conversation ID to associate with
+            store_audio: Whether to store the audio in the repository
 
         Returns:
-            List of transcription segments (typically just one)
+            List of transcription segments with text and metadata
         """
         try:
-            # Get the API token (only user-provided)
-            huggingface_token = settings.auth.HUGGINGFACE_TOKEN
-
-            if not huggingface_token:
-                logger.error(
-                    "HuggingFace token not available. User must provide an API key."
-                )
-                return [
-                    {
-                        "index": 0,
-                        "text": "Error: HuggingFace API key is missing. Please provide your API key at /api-keys/huggingface",
-                    }
-                ]
-
-            # Always use a valid model ID - fall back to the default if none provided
+            # Use the selected model or fall back to the default
             selected_model = model_id if model_id else self.default_model_id
+            logger.info(f"Processing audio with model {selected_model}")
 
-            # Construct the full API URL with the selected model
-            api_url = f"{self.api_base_url}/{selected_model}"
+            # Validate content type
+            if not self.audio_processor.validate_content_type(content_type):
+                logger.error(f"Invalid content type: {content_type}")
+                return [{"index": 0, "text": "Error: Invalid audio format."}]
 
-            logger.info(
-                f"Processing audio with model {selected_model} (content type: {content_type})"
+            # Optimize audio for speech recognition using the audio processor
+            optimized_audio = self.audio_processor.optimize_for_stt(audio_content, content_type)
+            if not optimized_audio:
+                logger.error("Failed to optimize audio")
+                return [{"index": 0, "text": "Error: Failed to process audio file."}]
+
+            # Store the optimized audio if requested
+            audio_id = None
+            if store_audio:
+                audio_id = await self.audio_repository.save_audio(
+                    audio_content=optimized_audio,
+                    content_type="audio/wav",  # Always WAV after optimization
+                    conversation_id=conversation_id,
+                    ttl_hours=24  # Default TTL
+                )
+
+            # Call Hugging Face API through the external client
+            result = await self.external_api_client.call_huggingface_api(
+                model_id=selected_model,
+                audio_content=optimized_audio,
+                content_type="audio/wav"  # Always WAV after optimization
             )
 
-            headers = {
-                "Authorization": f"Bearer {huggingface_token}",
-                "Content-Type": content_type,
-            }
-
-            # Try multiple times with exponential backoff
-            for attempt in range(self.max_retries):
-                try:
-                    logger.info(f"Attempt {attempt + 1}/{self.max_retries}")
-
-                    # Use a longer timeout for the first attempt (model loading)
-                    timeout = 30.0 if attempt == 0 else 15.0
-
-                    response = requests.post(
-                        api_url,
-                        headers=headers,
-                        data=audio_content,
-                        timeout=timeout,  # Add explicit timeout
-                    )
-
-                    if response.status_code == 200:
-                        try:
-                            transcription_result = response.json()
-                        except ValueError:
-                            # Not JSON, treat as plain text
-                            transcription_result = {"text": response.text}
-
-                        # Extract the text from the transcription
-                        if (
-                            isinstance(transcription_result, dict)
-                            and "text" in transcription_result
-                        ):
-                            text = transcription_result["text"]
-                        else:
-                            text = str(transcription_result)
-
-                        # Check for failure markers in the text
-                        failure_markers = [
-                            "Failed to transcribe",
-                            "Error processing audio",
-                            "failed to transcribe",
-                        ]
-
-                        if text and not any(
-                            marker in text for marker in failure_markers
-                        ):
-                            return [{"index": 0, "text": text}]
-                        else:
-                            logger.warning(
-                                f"API returned success but with failure message: {text}"
-                            )
-                            # This is likely a loading issue, so wait longer and retry
-                            wait_time = max(3, (self.backoff_factor**attempt) * 2)
-                            logger.info(f"Waiting {wait_time}s before retrying...")
-                            time.sleep(wait_time)
-                            continue
-
-                    elif response.status_code == 401:
-                        # Authentication error - likely invalid token
-                        logger.error(
-                            "Authentication failed. Please provide a valid HuggingFace API key."
-                        )
-                        return [
-                            {
-                                "index": 0,
-                                "text": "Error: Invalid HuggingFace API key. Please provide a valid API key at /api-keys/huggingface",
-                            }
-                        ]
-
-                    elif response.status_code == 503:
-                        # Service unavailable, likely model loading
-                        wait_time = max(5, (self.backoff_factor**attempt) * 2)
-                        logger.warning(
-                            f"API returned 503, model likely loading. Retry in {wait_time}s..."
-                        )
-                        time.sleep(wait_time)
-                        continue
-
-                    elif response.status_code in [400, 403]:
-                        # Format issues or forbidden
-                        logger.error(
-                            f"API returned {response.status_code}: {response.text}"
-                        )
-
-                        # If first attempt, retry anyway - sometimes this happens on cold start
-                        if attempt == 0:
-                            logger.info(
-                                "First attempt returned error - retrying anyway..."
-                            )
-                            time.sleep(3)
-                            continue
-                        elif attempt < self.max_retries - 1:
-                            time.sleep(2)
-                            continue
-                        else:
-                            # Last attempt failed
-                            return [
-                                {
-                                    "index": 0,
-                                    "text": f"Failed to transcribe audio: API error {response.status_code}",
-                                }
-                            ]
-                    else:
-                        # Other error
-                        logger.error(
-                            f"API error: {response.status_code} - {response.text}"
-                        )
-
-                        if attempt < self.max_retries - 1:
-                            # Wait longer before retrying
-                            wait_time = (self.backoff_factor**attempt) * 1.5 + 1
-                            logger.info(f"Retrying in {wait_time} seconds...")
-                            time.sleep(wait_time)
-                        else:
-                            # Last attempt failed
-                            return [
-                                {
-                                    "index": 0,
-                                    "text": f"Failed to transcribe audio: API error {response.status_code}",
-                                }
-                            ]
-
-                except requests.exceptions.Timeout:
-                    logger.warning(f"Request timeout on attempt {attempt + 1}")
-                    # For timeouts, use longer delays
-                    wait_time = (self.backoff_factor**attempt) * 2 + 3
-                    if attempt < self.max_retries - 1:
-                        logger.info(f"Retrying in {wait_time} seconds after timeout...")
-                        time.sleep(wait_time)
-                    else:
-                        return [{"index": 0, "text": "Transcription timed out"}]
-
-                except Exception as e:
-                    logger.error(f"Error in processing attempt {attempt + 1}: {str(e)}")
-
-                    if attempt < self.max_retries - 1:
-                        # Try again with increased delay
-                        wait_time = (self.backoff_factor**attempt) + 2
-                        logger.info(f"Retrying in {wait_time} seconds...")
-                        time.sleep(wait_time)
-                    else:
-                        # Last attempt failed
-                        return [
-                            {"index": 0, "text": f"Error processing audio: {str(e)}"}
-                        ]
-
-            # If we're here, all attempts failed
-            return [
-                {
+            if not result["success"]:
+                logger.error(f"API error: {result.get('error')}")
+                return [{
                     "index": 0,
-                    "text": "Failed to transcribe audio after multiple attempts",
-                }
-            ]
+                    "text": result["text"],
+                    "audio_id": audio_id
+                }]
+
+            # Return the transcription as a segment
+            return [{
+                "index": 0,
+                "text": result["text"],
+                "audio_id": audio_id
+            }]
 
         except Exception as e:
             logger.error(f"Unexpected error in audio processing: {str(e)}")
-            return [{"index": 0, "text": "Error processing audio file."}]
+            return [{"index": 0, "text": f"Error processing audio file: {str(e)}"}]
 
     def clean_transcription(self, transcriptions: List[Dict[str, Any]]) -> str:
         """
@@ -242,7 +127,7 @@ class SpeechRecognitionService:
         # Combine all transcriptions
         full_text = " ".join([t.get("text", "") for t in sorted_transcriptions])
 
-        # Clean up the transcription text if it contains failure messages
+        # Clean up the transcription text
         clean_text = re.sub(
             r"\[Segment \d+ transcription failed\]\s*", "", full_text
         ).strip()
@@ -255,54 +140,35 @@ class SpeechRecognitionService:
 
         return clean_text
 
+    async def get_audio_by_id(self, audio_id: str) -> tuple[Optional[bytes], Optional[str]]:
+        """
+        Retrieve previously processed audio by ID.
+
+        Args:
+            audio_id: The audio file ID
+
+        Returns:
+            Tuple of (audio_content, content_type) if found, (None, None) otherwise
+        """
+        return await self.audio_repository.get_audio(audio_id)
+
     async def warm_up_inference_api(self) -> None:
         """
         Send a small dummy request to the Hugging Face API to trigger model loading.
-        Only runs if a user-provided API key is available.
+        Runs in the background during application startup.
         """
         try:
-            # Get the API token (user-provided only)
-            huggingface_token = settings.auth.HUGGINGFACE_TOKEN
+            logger.info(f"Warming up Hugging Face Inference API for model: {self.default_model_id}")
 
-            if not huggingface_token:
-                logger.warning("Cannot warm up HuggingFace API: No API token available")
-                return
+            # Generate a tiny audio file (0.5 seconds of silence) using audio processor
+            audio_content = self.audio_processor.create_silent_audio(duration=0.5)
 
-            logger.info(
-                f"Warming up Hugging Face Inference API for model: {self.default_model_id}"
+            # Send the request in background
+            await self.external_api_client.call_huggingface_api(
+                model_id=self.default_model_id,
+                audio_content=audio_content,
+                content_type="audio/wav"
             )
-
-            # Generate a tiny audio file (0.5 seconds of silence)
-            sample_rate = self.sample_rate
-            duration = 0.5
-            samples = np.zeros(int(sample_rate * duration), dtype=np.int16)
-
-            buffer = BytesIO()
-            with wave.open(buffer, "wb") as wav_file:
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(sample_rate)
-                wav_file.writeframes(samples.tobytes())
-
-            audio_content = buffer.getvalue()
-
-            # Send warm-up request
-            api_url = f"{self.api_base_url}/{self.default_model_id}"
-            headers = {
-                "Authorization": f"Bearer {huggingface_token}",
-                "Content-Type": "audio/wav",
-            }
-
-            logger.info("Sending warm-up request to Hugging Face API")
-            try:
-                response = requests.post(
-                    api_url, headers=headers, data=audio_content, timeout=45.0
-                )
-                logger.info(
-                    f"Warm-up request completed with status {response.status_code}"
-                )
-            except Exception as e:
-                logger.warning(f"Warm-up request failed: {str(e)}")
 
             # Wait a moment for model to initialize fully
             logger.info("Waiting for model to initialize...")
@@ -311,55 +177,3 @@ class SpeechRecognitionService:
 
         except Exception as e:
             logger.warning(f"Failed to warm up inference API: {str(e)}")
-
-
-speech_recognition_service = SpeechRecognitionService()
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    speech_recognition_service = SpeechRecognitionService()
-
-    async def test_speech_recognition():
-        print("Testing Speech Recognition Service")
-        print("==================================")
-
-        # Test warm-up
-        print("\n1. Testing API warm-up...")
-        await speech_recognition_service.warm_up_inference_api()
-
-        # Test with a sample audio file if provided
-        audio_path = "/Users/vesaalexandru/Workspaces/cube/stt-for-edge-devices/data/M18_05_01.wav"
-
-        # Read the audio file
-        with open(audio_path, "rb") as f:
-            audio_content = f.read()
-
-        # Determine content type based on file extension
-        content_type = "audio/wav"
-        if audio_path.lower().endswith(".mp3"):
-            content_type = "audio/mpeg"
-        elif audio_path.lower().endswith(".ogg"):
-            content_type = "audio/ogg"
-        elif audio_path.lower().endswith(".flac"):
-            content_type = "audio/flac"
-
-        print(f"Content type: {content_type}")
-
-        # Process the audio
-        print("Processing audio...")
-        transcriptions = speech_recognition_service.process_audio_file(
-            audio_content, content_type
-        )
-
-        print("\nTranscription results:")
-        for t in transcriptions:
-            print(f"Segment {t.get('index', 0)}: {t.get('text', '')}")
-
-        # Clean the transcription
-        clean_text = speech_recognition_service.clean_transcription(transcriptions)
-        print(f"\nCleaned transcription: {clean_text}")
-
-    # Run the test
-    asyncio.run(test_speech_recognition())

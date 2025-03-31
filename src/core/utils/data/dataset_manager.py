@@ -16,14 +16,14 @@ class DatasetManager:
         """
         try:
             # The desired output directory as specified in the settings
-            output_dir = Path(settings.DATA_OUTPUT_DIR)
+            output_dir = Path(settings.data.DATA_OUTPUT_DIR)
             # Our final expected location for the audio files is in an "output" subdirectory
             final_extracted_path = output_dir / "output"
 
             # Check if the dataset already exists (i.e., if the 'output' subdirectory exists and contains audio files)
             if final_extracted_path.exists():
                 audio_files = list(final_extracted_path.rglob('*'))
-                if any(file.suffix.lower() in settings.DATA_AUDIO_EXTENSIONS for file in audio_files):
+                if any(file.suffix.lower() in settings.data.DATA_AUDIO_EXTENSIONS for file in audio_files):
                     print(f"Dataset already exists at {final_extracted_path}. Skipping download.")
                     self.dataset_path = output_dir
                     self.extracted_path = final_extracted_path
@@ -34,7 +34,7 @@ class DatasetManager:
 
             # Download dataset from Kaggle
             # This is the kids speech dataset from the settings
-            default_download_path_str = kagglehub.dataset_download(settings.DATA_KAGGLE_DATASET)
+            default_download_path_str = kagglehub.dataset_download(settings.data.DATA_KAGGLE_DATASET)
             default_download_path = Path(default_download_path_str)
             print("Dataset downloaded at default path:", default_download_path)
 
@@ -69,4 +69,4 @@ class DatasetManager:
 
         # Check if at least one audio file exists in the extracted path
         audio_files = list(self.extracted_path.rglob('*'))
-        return any(file.suffix.lower() in settings.DATA_AUDIO_EXTENSIONS for file in audio_files)
+        return any(file.suffix.lower() in settings.data.DATA_AUDIO_EXTENSIONS for file in audio_files)

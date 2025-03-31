@@ -6,28 +6,35 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from src.asr.asr_processor import ASRProcessor
-from src.config.settings import Settings
-from src.utils.audio_handling import AudioUtils
+from src.config.settings import settings
+from src.core.utils.audio.audio_handling import AudioProcessor
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
 class DatasetProcessor:
-    """Handles processing of audio datasets with ASR."""
+    """
+    Handles processing of audio datasets with ASR.
+    Uses the centralized AudioProcessor for all audio operations.
+    """
 
-    def __init__(self, asr_processor: ASRProcessor, config: Settings):
-        """Initialize the dataset processor.
+    def __init__(self, asr_processor: ASRProcessor, config: settings, audio_processor: Optional[AudioProcessor] = None):
+        """
+        Initialize the dataset processor.
 
         Args:
             asr_processor: The ASR processor to use for transcription
             config: Configuration object containing dataset settings
+            audio_processor: Optional audio processor instance
         """
         self.asr_processor = asr_processor
         self.config = config
+        self.audio_processor = audio_processor or AudioProcessor(config)
 
     def find_audio_files(self, input_dir: str) -> List[Path]:
-        """Find all audio files in the input directory.
+        """
+        Find all audio files in the input directory.
 
         Args:
             input_dir: Directory to search for audio files
@@ -43,9 +50,7 @@ class DatasetProcessor:
             logger.info(f"Using subdirectory: {input_path}")
 
         # Find audio files
-        audio_extensions = self.config.dataset.get(
-            "audio_extensions", [".wav", ".mp3", ".flac"]
-        )
+        audio_extensions = self.config.data.DATA_AUDIO_EXTENSIONS
         audio_files = []
         for ext in audio_extensions:
             audio_files.extend(input_path.rglob(f"*{ext}"))
@@ -56,7 +61,8 @@ class DatasetProcessor:
     def filter_by_duration(
         self, audio_files: List[Path], max_duration: float
     ) -> List[Path]:
-        """Filter audio files by duration.
+        """
+        Filter audio files by duration using AudioProcessor.
 
         Args:
             audio_files: List of audio file paths
@@ -68,7 +74,8 @@ class DatasetProcessor:
         filtered_files = []
         for file in audio_files:
             try:
-                duration = AudioUtils.get_audio_duration(file)
+                # Use AudioProcessor to get duration
+                duration = self.audio_processor.get_audio_duration(file)
                 if duration is not None and duration <= max_duration:
                     filtered_files.append(file)
             except Exception as e:
@@ -82,7 +89,8 @@ class DatasetProcessor:
     def load_existing_results(
         self, output_file: str
     ) -> tuple[List[Dict[str, Any]], Set[str]]:
-        """Load existing results from output file.
+        """
+        Load existing results from output file.
 
         Args:
             output_file: Path to the output file
@@ -107,7 +115,8 @@ class DatasetProcessor:
         return results, processed_files
 
     def save_results(self, results: List[Dict[str, Any]], output_file: str) -> None:
-        """Save results to output file.
+        """
+        Save results to output file.
 
         Args:
             results: List of transcription results
@@ -128,7 +137,8 @@ class DatasetProcessor:
         batch_size: Optional[int] = None,
         save_interval: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """Process audio files with duration filtering.
+        """
+        Process audio files with duration filtering.
 
         Args:
             input_dir: Directory containing audio files
@@ -141,15 +151,13 @@ class DatasetProcessor:
             List of transcription results as dictionaries
         """
         # Get configuration parameters with fallbacks
-        max_duration = max_duration or self.config.dataset.get(
-            "max_duration", float("inf")
-        )
-        batch_size = batch_size or self.config.model.get("batch_size", 10)
-        save_interval = save_interval or self.config.model.get("save_interval", 50)
+        max_duration = max_duration or self.config.data.DATA_MAX_AUDIO_DURATION
+        batch_size = batch_size or self.config.model.MODEL_BATCH_SIZE
+        save_interval = save_interval or self.config.model.MODEL_SAVE_INTERVAL
 
         # Set CPU core limit if specified
         if "num_cores" in self.config.model:
-            AudioUtils.limit_cpu_cores(self.config.model["num_cores"])
+            self.audio_processor.limit_cpu_cores(self.config.model.MODEL_NUM_CORES)
 
         # Find and filter audio files
         audio_files = self.find_audio_files(input_dir)
@@ -169,16 +177,16 @@ class DatasetProcessor:
         total_files = len(files_to_process)
         for i, audio_file in enumerate(files_to_process):
             result = self.asr_processor.process_audio_file(audio_file)
-            results.append(result.to_dict())
+            results.append(result)
 
             # Log progress
-            if result.status == "success":
+            if result["status"] == "success":
                 logger.info(
-                    f"[{i + 1}/{total_files}] Processed {result.file_name} ({result.duration:.2f}s)"
+                    f"[{i + 1}/{total_files}] Processed {result['file_name']} ({result['duration']:.2f}s)"
                 )
             else:
                 logger.error(
-                    f"[{i + 1}/{total_files}] Failed to process {result.file_name}: {result.error}"
+                    f"[{i + 1}/{total_files}] Failed to process {result['file_name']}: {result.get('error', 'Unknown error')}"
                 )
 
             # Clear memory after each batch
