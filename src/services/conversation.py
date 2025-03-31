@@ -18,12 +18,12 @@ class ConversationService:
     """
 
     def __init__(
-            self,
-            conversation_repo: IConversationRepository,
-            message_repo: IMessageRepository,
-            memory_repo: IMemoryRepository,
-            memory_service: Optional[IMemoryService] = None,
-            external_api_client: Optional[IExternalAPIClient] = None
+        self,
+        conversation_repo: IConversationRepository,
+        message_repo: IMessageRepository,
+        memory_repo: IMemoryRepository,
+        memory_service: Optional[IMemoryService] = None,
+        external_api_client: Optional[IExternalAPIClient] = None
     ):
         """
         Initialize the service with repositories and dependencies.
