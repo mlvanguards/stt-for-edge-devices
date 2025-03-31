@@ -3,8 +3,11 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 
 from src.config.settings import settings
-from src.models.requests import ConversationCreate
-from src.models.responses import ConversationListResponse, ConversationResponse
+from src.schemas import (
+    ConversationCreate,
+    ConversationListResponse,
+    ConversationResponse
+)
 from src.services.service_container import services
 
 router = APIRouter(tags=["conversations"])

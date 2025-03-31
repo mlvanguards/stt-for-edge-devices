@@ -19,11 +19,6 @@ class APISettings(BaseAppSettings):
     """API-related settings."""
 
     API_VERSION: str = "1.0.0"
-    API_TITLE: str = "STT and Chat API with Conversation Memory, TTS, and MongoDB"
-    API_DESCRIPTION: str = """
-    Speech-to-text transcription, conversation management with GPT models and short-term memory, 
-    and text-to-speech synthesis API optimized for edge devices.
-    """
 
     # CORS settings
     CORS_ALLOW_ORIGINS: List[str] = ["*"]
@@ -92,7 +87,7 @@ class MemorySettings(BaseAppSettings):
 class TTSSettings(BaseAppSettings):
     """Text-to-speech related settings."""
 
-    ELEVENLABS_API_URL: str = "https://api.elevenlabs.io/v1/text-to-speech"
+    ELEVENLABS_API_URL: str = "https://api.elevenlabs.io/v1/"
     DEFAULT_VOICE_ID: str = "cgSgspJ2msm6clMCkdW9"
     TTS_MODEL_ID: str = "eleven_turbo_v2"
     TTS_DEFAULT_SETTINGS: Dict[str, Any] = {

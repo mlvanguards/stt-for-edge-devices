@@ -291,22 +291,6 @@ class ExternalAPIClient(IExternalAPIClient):
         # Get the API key (user-provided only)
         elevenlabs_api_key = settings.auth.ELEVENLABS_API_KEY
 
-        if not elevenlabs_api_key:
-            logger.error("ElevenLabs API key not available. User must provide an API key.")
-            return {
-                "success": False,
-                "error": "ElevenLabs API key is missing",
-                "message": "ElevenLabs API key is missing. Please provide your API key at /api-keys/elevenlabs",
-            }
-
-        if not text:
-            logger.error("No text provided for speech synthesis")
-            return {
-                "success": False,
-                "error": "No text provided",
-                "message": "No text provided for speech synthesis",
-            }
-
         headers = {"xi-api-key": elevenlabs_api_key, "Content-Type": "application/json"}
 
         # Use provided model ID or default from settings

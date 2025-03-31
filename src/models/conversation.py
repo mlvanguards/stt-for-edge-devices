@@ -1,26 +1,29 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import Field
+from pydantic import Field, UUID4
 from src.config.settings import settings
-from .base import MongoBaseModel
+from src.models.base import BaseModel, TimestampMixin
 
 
-class MessageModel(MongoBaseModel):
+class MessageModel(BaseModel):
     """Core message domain model"""
-    conversation_id: str
     role: str
     content: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=datetime.now)
     importance: Optional[float] = None
+    conversation_id: UUID4
+
+    class Meta:
+        name = "messages"
 
 
-class ConversationModel(MongoBaseModel):
+class ConversationModel(BaseModel, TimestampMixin):
     """Core conversation domain model"""
-    conversation_id: str
     system_prompt: str = Field(default=settings.DEFAULT_SYSTEM_PROMPT)
     voice_id: str = Field(default=settings.DEFAULT_VOICE_ID)
     stt_model_id: Optional[str] = Field(default=settings.DEFAULT_STT_MODEL_ID)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
     message_count: int = 0
     memory_optimized: bool = False
+
+    class Meta:
+        name = "conversations"

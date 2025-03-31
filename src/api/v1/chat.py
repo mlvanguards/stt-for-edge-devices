@@ -5,7 +5,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 import traceback
 
 from src.config.settings import settings
-from src.models.responses import ChatResponse
+from src.schemas import ChatResponse
 from src.services.service_container import services
 
 router = APIRouter(tags=["chat"])
@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 @router.post("/chat", response_model=ChatResponse)
 async def process_audio(
-        file: UploadFile = File(...),
-        conversation_id: Optional[str] = Form(None),
-        voice_id: Optional[str] = Form(None),
-        model_id: Optional[str] = Form(None),
-        force_split: bool = Form(False),
+    file: UploadFile = File(...),
+    conversation_id: Optional[str] = Form(None),
+    voice_id: Optional[str] = Form(None),
+    model_id: Optional[str] = Form(None),
+    force_split: bool = Form(False),
 ):
     """
     Maintains conversation context between requests with enhanced memory.
