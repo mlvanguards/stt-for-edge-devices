@@ -4,14 +4,14 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 
 from src.config.settings import settings
-from src.core.interfaces.service import IConversationService, IMemoryService
+from src.core.interfaces.service import IMemoryService
 from src.core.interfaces.repository import IConversationRepository, IMessageRepository, IMemoryRepository
 from src.core.interfaces.service import IExternalAPIClient
 
 logger = logging.getLogger(__name__)
 
 
-class ConversationService(IConversationService):
+class ConversationService:
     """
     Service for managing conversations.
     Implements the IConversationService interface.

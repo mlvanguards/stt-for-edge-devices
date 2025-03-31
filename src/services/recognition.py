@@ -4,7 +4,6 @@ import re
 from typing import Any, Dict, List, Optional
 
 from src.config.settings import settings
-from src.core.interfaces.service import ISpeechRecognitionService
 from src.core.interfaces.repository import IAudioRepository
 from src.core.interfaces.service import IExternalAPIClient
 from src.core.utils.audio.audio_handling import AudioProcessor
@@ -12,7 +11,7 @@ from src.core.utils.audio.audio_handling import AudioProcessor
 logger = logging.getLogger(__name__)
 
 
-class SpeechRecognitionService(ISpeechRecognitionService):
+class SpeechRecognitionService):
     """
     Service for handling speech recognition operations.
     Implements the ISpeechRecognitionService interface.

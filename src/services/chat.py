@@ -8,17 +8,16 @@ from src.core.interfaces.service import IChatService, ISummarizerService, IMemor
 logger = logging.getLogger(__name__)
 
 
-class ChatService(IChatService, ISummarizerService):
+class ChatService:
     """
     Service for handling chat operations with memory management.
     Implements both IChatService and ISummarizerService interfaces.
     """
 
     def __init__(
-            self,
-            external_api_client: IExternalAPIClient,
-            memory_service: Optional[IMemoryService] = None,
-            conversation_service: Optional[IConversationService] = None
+        self,
+        memory_service: Optional[IMemoryService] = None,
+        conversation_service: Optional[IConversationService] = None
     ):
         """
         Initialize with dependencies injected.
@@ -28,7 +27,6 @@ class ChatService(IChatService, ISummarizerService):
             memory_service: Optional memory service for optimization
             conversation_service: Optional conversation service for storage
         """
-        self.external_api_client = external_api_client
         self.memory_service = memory_service
         self.conversation_service = conversation_service
 

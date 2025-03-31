@@ -2,18 +2,17 @@ import logging
 from typing import Dict, List, Any, Optional
 
 from src.config.settings import settings
-from src.core.interfaces.service import IMemoryService, ISummarizerService
 
 logger = logging.getLogger(__name__)
 
 
-class MemoryService(IMemoryService):
+class MemoryService:
     """
     Service for managing conversation memory and summarization.
     Implements the IMemoryService interface.
     """
 
-    def __init__(self, summarizer_service: Optional[ISummarizerService] = None):
+    def __init__(self, summarizer_service):
         """
         Initialize the memory service with dependencies.
 
