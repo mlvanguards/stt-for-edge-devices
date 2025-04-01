@@ -21,39 +21,8 @@ This application requires users to provide their own API keys for the following 
 - **OpenAI**: For chat functionality (GPT models)
 - **ElevenLabs**: For text-to-speech synthesis
 
-### Submitting API Keys
 
-The application provides endpoints to submit your API keys which will be stored in memory for the duration of the session:
-
-#### Submit all API keys at once:
-
-```http
-POST /api-keys/submit
-```
-
-Request body:
-
-```json
-{
-  "huggingface_token": "your_huggingface_token",
-  "openai_api_key": "your_openai_api_key",
-  "elevenlabs_api_key": "your_elevenlabs_api_key"
-}
-```
-
-#### Check API key status:
-
-```http
-GET /api-keys/status
-```
-
-#### Reset API keys:
-
-```http
-DELETE /api-keys/reset
-```
-
-> **Important**: The application will not function correctly without these API keys. You must provide your own valid API keys before using the core features.
+> **Important**: The application will not function correctly without these API keys. You must create a .env with your own valid API keys before using the core features.
 
 ## 🚀 Quick Start
 
@@ -86,7 +55,7 @@ pip install -r requirements.txt
 
 ```bash
 # Start the FastAPI server
-uvicorn src.api.main:app --reload
+uvicorn src.main:app --reload
 ```
 
 Visit `http://localhost:8000/docs` to access the Swagger UI and test the API.
@@ -117,15 +86,6 @@ Once running, the frontend will connect to your local FastAPI server at http://l
 
 ## 📋 API Endpoints
 
-### API Key Management
-
-- **POST /api-keys/submit** - Submit all API keys at once
-- **POST /api-keys/huggingface** - Submit HuggingFace token
-- **POST /api-keys/openai** - Submit OpenAI API key
-- **POST /api-keys/elevenlabs** - Submit ElevenLabs API key
-- **GET /api-keys/status** - Check API key status
-- **DELETE /api-keys/reset** - Reset all API keys
-
 ### Speech-to-Text + Chat
 
 - **POST /chat** - Process audio, maintain conversation context, get AI response
@@ -148,27 +108,41 @@ Once running, the frontend will connect to your local FastAPI server at http://l
 ## 🏗️ Project Structure
 
 ```
-├── genezio.yaml          # Genezio serverless configuration
-├── requirements.txt      # Python dependencies for deployment
-├── pyproject.toml        # Poetry configuration
-├── .env.example          # Environment variables template
-├── data/                 # Example data and results
-└── src/
-    ├── api/              # FastAPI server and routes
-    │   ├── routes/       # API endpoint implementations
-    │   └── main.py       # FastAPI application entry point
-    ├── asr/              # Automatic speech recognition
-    ├── config/           # Configuration settings
-    ├── core/             # Core functionality
-    │   ├── database.py   # MongoDB integration
-    │   ├── chat.py       # OpenAI/ChatGPT integration
-    │   └── speech/       # Speech processing utilities
-    ├── data/             # Data processing utilities
-    ├── models/           # Pydantic data models
-    ├── resource_testing/ # Edge device profiling tools
-    └── utils/            # Utility functions
-        ├── api_keys_service.py # API keys utility functions
-        └── audio_handling.py   # Audio processing utilities
+stt-for-edge-devices/
+├── README.md
+├── genezio.yaml               # Serverless deployment configuration
+├── pyproject.toml             # Poetry project configuration
+├── requirements.txt           # Pip dependencies
+├── .env.example               # Environment variables template
+├── data/                      # Example dataset (transcriptions-test.json)
+├── scripts/                   # Auxiliary scripts and notebooks
+│   ├── automatic_transcription.py  # Automatic ASR processing script
+│   └── fine_tuning_and_optimization.ipynb  # Fine-tuning & optimization notebook
+└── src/                       # Main application code
+    ├── main.py              # FastAPI application entry point
+    ├── db.py                # MongoDB connection management
+    ├── dependencies.py      # Dependency injection setup
+    ├── errors.py            # Custom exception definitions
+    ├── schemas.py           # Pydantic request/response models
+    ├── config/              # Application settings
+    │   └── settings.py
+    ├── api/                 # API routes
+    │   └── v1/
+    │       ├── chat.py
+    │       ├── conversations.py
+    │       └── tts.py
+    ├── asr/                 # Speech recognition modules
+    │   ├── asr_processor.py
+    │   ├── base.py
+    │   └── speech_brain.py
+    ├── gateways/            # External API integrations (HuggingFace, OpenAI, ElevenLabs)
+    ├── models/              # Data models
+    ├── repositories/        # Database repositories (conversations, messages, audio, memory)
+    ├── services/            # Business logic (chat, conversation, ASR, TTS, memory)
+    ├── resource_testing/    # Edge device profiling tools
+    │   └── run_edge_profiler.py
+    └── utils/               # Utility modules (audio processing, data normalization, etc.)
+
 ```
 
 ## 🔍 Edge Device Profiling
