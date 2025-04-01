@@ -1,7 +1,7 @@
 import os
 from src.resource_testing.stt_edge_profiler import STTEdgeProfiler
 from src.config.settings import settings
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
 
 # Create centralized audio processor
 audio_processor = AudioProcessor()

@@ -3,7 +3,7 @@ from typing import Dict, Optional
 
 from src.asr.base import ASRModelInterface
 from src.asr.speech_brain import SpeechBrainASR
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
 
 
 class ASRProcessor:

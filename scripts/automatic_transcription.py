@@ -1,10 +1,10 @@
-from src.core.utils.data.dataset_manager import DatasetManager
+from src.utils.data.dataset_manager import DatasetManager
 from src.asr.asr_processor import ASRProcessor
-from src.core.utils.data.data_normalizer import DataNormalizer
-from src.core.utils.data.data_splitter import DataSplitter
-from src.core.utils.data.dataset_creator import DatasetCreator
+from src.utils.data.data_normalizer import DataNormalizer
+from src.utils.data.data_splitter import DataSplitter
+from src.utils.data.dataset_creator import DatasetCreator
 from src.config.settings import settings
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
 from src.asr.dataset_processor import DatasetProcessor
 
 

@@ -1,16 +1,17 @@
 import logging
 from typing import Any, Dict, List
 import uuid
-from src.config.settings import settings
 from src.repositories.base import BaseRepository
+from src.models.conversation import MessageModel
 
 logger = logging.getLogger(__name__)
 
-
 class MessageRepository(BaseRepository):
-    """
-    MongoDB implementation of the MessageRepository interface.
-    """
+    # Set the model to the MessageModel from our models
+    model = MessageModel
+
+    def __init__(self, db):
+        super().__init__(db)
 
     async def get_by_conversation_id(self, conversation_id: uuid.UUID) -> List[Dict[str, Any]]:
         """
@@ -29,7 +30,7 @@ class MessageRepository(BaseRepository):
         Update the importance score of a message.
 
         Args:
-            message_id: The message identifier (MongoDB ObjectId as string)
+            message_id: The message identifier
             importance: The new importance score
 
         Returns:
@@ -52,11 +53,8 @@ class MessageRepository(BaseRepository):
             Number of deleted messages
         """
         try:
-
             result = await self.delete_many(conversation_id=conversation_id)
-
             return result.deleted_count
-
         except Exception as e:
             logger.error(f"Error deleting messages by conversation: {str(e)}")
             return 0

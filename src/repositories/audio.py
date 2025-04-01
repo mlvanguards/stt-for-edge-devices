@@ -6,39 +6,30 @@ from bson.objectid import ObjectId
 from bson.binary import Binary
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from src.repositories.base_mongo import BaseMongoRepository
-from src.core.interfaces.repository import IAudioRepository
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
+from src.repositories.base import BaseRepository
+from src.models.base import BaseModel
 
 logger = logging.getLogger(__name__)
 
 
-class MongoAudioRepository(BaseMongoRepository[Dict[str, Any]], IAudioRepository):
-    """
-    MongoDB implementation of the AudioRepository interface.
-    Uses the centralized AudioProcessor for audio-related operations.
-    """
+class AudioModel(BaseModel):
+    class Meta:
+        name = "audio_files"
 
-    def __init__(self, audio_processor: Optional[AudioProcessor] = None):
-        """
-        Initialize the repository with collection name and audio processor.
+class AudioRepository(BaseRepository):
+    model = AudioModel
 
-        Args:
-            audio_processor: Optional AudioProcessor instance
-        """
-        self._collection_name = "audio_files"  # Not in settings, add if needed
+    def __init__(self, db, audio_processor: Optional[AudioProcessor] = None):
         self.audio_processor = audio_processor or AudioProcessor()
+        super().__init__(db)
 
     async def _get_collection(self) -> AsyncIOMotorCollection:
-        """
-        Get the MongoDB collection and ensure indexes are created.
-        """
-        collection = await super()._get_collection()
+        collection = self._collection
 
-        # Create indexes if they don't exist
+        # Create indexes on this collection
         await collection.create_index("conversation_id")
-        await collection.create_index("expires_at", expireAfterSeconds=0)  # TTL index
-
+        await collection.create_index("expires_at", expireAfterSeconds=0)
         return collection
 
     async def save_audio(
@@ -48,34 +39,21 @@ class MongoAudioRepository(BaseMongoRepository[Dict[str, Any]], IAudioRepository
             conversation_id: Optional[str] = None,
             ttl_hours: int = 24
     ) -> Optional[str]:
-        """
-        Save audio content.
-
-        Args:
-            audio_content: Raw audio bytes
-            content_type: MIME type of the audio
-            conversation_id: Optional conversation ID to associate with
-            ttl_hours: Time-to-live in hours for automatic cleanup
-
-        Returns:
-            The audio ID if saved successfully, None otherwise
-        """
         try:
-            # Validate content type using audio processor
             if not self.audio_processor.validate_content_type(content_type):
                 logger.warning(f"Invalid content type: {content_type}")
                 return None
 
-            # Get audio duration if possible
             duration = None
-            try:
-                duration = self.audio_processor.get_audio_duration(audio_content)
-            except Exception as e:
-                logger.warning(f"Could not determine audio duration: {str(e)}")
+            # Only try to get duration for WAV files - skip for MP3
+            if content_type in ["audio/wav", "audio/x-wav"]:
+                try:
+                    duration = self.audio_processor.get_audio_duration(audio_content)
+                except Exception as e:
+                    logger.warning(f"Could not determine audio duration: {str(e)}")
 
-            # Create audio document
             audio_doc = {
-                "content": Binary(audio_content),  # Store as Binary BSON type
+                "content": Binary(audio_content),
                 "content_type": content_type,
                 "size_bytes": len(audio_content),
                 "duration": duration,
@@ -84,11 +62,11 @@ class MongoAudioRepository(BaseMongoRepository[Dict[str, Any]], IAudioRepository
                 "expires_at": datetime.utcnow() + timedelta(hours=ttl_hours)
             }
 
-            # Create using base method
-            result = await self.create(audio_doc)
+            collection = await self._get_collection()
+            result = await collection.insert_one(audio_doc)
 
-            if result:
-                audio_id = str(result["_id"])
+            if result.inserted_id:
+                audio_id = str(result.inserted_id)
                 logger.info(f"Saved audio file {audio_id} ({len(audio_content)} bytes)")
                 return audio_id
 
@@ -99,19 +77,8 @@ class MongoAudioRepository(BaseMongoRepository[Dict[str, Any]], IAudioRepository
             return None
 
     async def get_audio(self, audio_id: str) -> Tuple[Optional[bytes], Optional[str]]:
-        """
-        Get audio content by ID.
-
-        Args:
-            audio_id: The audio identifier
-
-        Returns:
-            Tuple of (audio_content, content_type) if found, (None, None) otherwise
-        """
         try:
             collection = await self._get_collection()
-
-            # Find audio document
             try:
                 object_id = ObjectId(audio_id)
             except Exception:
@@ -124,7 +91,6 @@ class MongoAudioRepository(BaseMongoRepository[Dict[str, Any]], IAudioRepository
                 logger.warning(f"Audio file {audio_id} not found")
                 return None, None
 
-            # Return audio content and type
             return audio_doc["content"], audio_doc["content_type"]
 
         except Exception as e:
@@ -132,36 +98,17 @@ class MongoAudioRepository(BaseMongoRepository[Dict[str, Any]], IAudioRepository
             return None, None
 
     async def cleanup_expired(self) -> int:
-        """
-        Delete expired audio files.
-
-        Returns:
-            Number of deleted files
-        """
         try:
             collection = await self._get_collection()
-
             result = await collection.delete_many({
                 "expires_at": {"$lt": datetime.utcnow()}
             })
-
             if result.deleted_count > 0:
                 logger.info(f"Cleaned up {result.deleted_count} expired audio files")
-
             return result.deleted_count
-
         except Exception as e:
             logger.error(f"Error cleaning up expired audio files: {str(e)}")
             return 0
 
     async def get_by_conversation_id(self, conversation_id: str) -> List[Dict[str, Any]]:
-        """
-        Get audio files for a conversation.
-
-        Args:
-            conversation_id: The conversation identifier
-
-        Returns:
-            List of audio files (without content)
-        """
         return await self.list(filters={"conversation_id": conversation_id})

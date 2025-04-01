@@ -11,16 +11,13 @@ class DatasetManager:
         self.extracted_path: Optional[Path] = None
 
     def download_dataset(self) -> Path:
-        """
-        If the dataset (the output subdirectory with audio files) already exists, skip the download.
-        """
         try:
-            # The desired output directory as specified in the settings
+            # Use the output directory defined in your settings (should be inside your repo)
             output_dir = Path(settings.data.DATA_OUTPUT_DIR)
-            # Our final expected location for the audio files is in an "output" subdirectory
+            # Expect audio files to be inside an "output" subdirectory
             final_extracted_path = output_dir / "output"
 
-            # Check if the dataset already exists (i.e., if the 'output' subdirectory exists and contains audio files)
+            # If the dataset already exists here, skip download
             if final_extracted_path.exists():
                 audio_files = list(final_extracted_path.rglob('*'))
                 if any(file.suffix.lower() in settings.data.DATA_AUDIO_EXTENSIONS for file in audio_files):
@@ -32,24 +29,27 @@ class DatasetManager:
             # Create the output directory if it does not exist
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Download dataset from Kaggle
-            # This is the kids speech dataset from the settings
+            # Download dataset from Kaggle using your dataset ID
             default_download_path_str = kagglehub.dataset_download(settings.data.DATA_KAGGLE_DATASET)
             default_download_path = Path(default_download_path_str)
             print("Dataset downloaded at default path:", default_download_path)
 
-            # Check for the 'output' subdirectory in the default download location
+            # Check for the subdirectory containing audio files.
+            # Try "output" first; if not found, check "extracted"
             temp_output = default_download_path / "output"
+            if not temp_output.exists():
+                temp_output = default_download_path / "extracted"
+
             if temp_output.exists():
-                # Move the entire 'output' folder to the final_extracted_path
+                # Move the entire folder to the final destination in your repo
                 shutil.move(str(temp_output), str(final_extracted_path))
             else:
-                # If there's no 'output' subdirectory, move all downloaded contents into final_extracted_path
+                # Otherwise, move all downloaded contents into final_extracted_path
                 final_extracted_path.mkdir(parents=True, exist_ok=True)
                 for item in default_download_path.iterdir():
                     shutil.move(str(item), str(final_extracted_path))
 
-            # Set the internal paths for later use
+            # Save internal paths for later use
             self.dataset_path = output_dir
             self.extracted_path = final_extracted_path
             return output_dir

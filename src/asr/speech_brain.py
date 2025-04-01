@@ -5,7 +5,7 @@ from typing import Union, Optional
 from speechbrain.inference.ASR import EncoderDecoderASR
 
 from src.asr.base import ASRModelInterface
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
 
 logger = logging.getLogger(__name__)
 

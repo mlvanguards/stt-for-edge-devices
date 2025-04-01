@@ -3,7 +3,7 @@ from typing import Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-from src.config import settings
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +21,12 @@ class DatabaseConnectionManager:
         self._client: Optional[AsyncIOMotorClient] = None
 
     async def get_db(self) -> AsyncIOMotorDatabase:
-        return self._client[settings.DATABASE_NAME]
+        return self._client[settings.db.MONGODB_DB]
 
     def init(self):
         try:
             self._client = AsyncIOMotorClient(
-                settings.DATABASE_HOST,
+                settings.db.MONGODB_URI,
                 uuidRepresentation="standard",
                 serverSelectionTimeoutMS=60000,
             )

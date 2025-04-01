@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, Tuple, Optional, Any
 
 from src.config.settings import settings
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
 
 
 class STTEdgeProfiler:

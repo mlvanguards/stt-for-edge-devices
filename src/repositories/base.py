@@ -1,11 +1,11 @@
 import uuid
-from bson import ObjectId
+
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pymongo import ReturnDocument, errors
-from typing import Dict, Any, List, Tuple, Optional, Coroutine
+from pymongo import ReturnDocument
+from typing import Dict, Any, List, Optional
 
 from src.models.base import BaseModel
-from src.erros import ImproperlyConfigured
+from src.errors import ImproperlyConfigured
 
 
 class BaseRepository:
@@ -18,16 +18,31 @@ class BaseRepository:
                 "Document should define an Settings configuration class with the name of the collection."
             )
 
-        self._collection = db[self.model.Settings.name]
+        self._collection = db[self.model.Meta.name]
 
-    async def get(self, **filter_options) -> BaseModel:
+    async def get(self, **filter_options) -> Optional[BaseModel]:
+        """Get a single document matching filter options."""
         result = await self._collection.find_one(filter_options)
+        if not result:
+            return None
         return self.model.from_mongo(result)
 
-    async def create(self, data: BaseModel) -> Dict[str, Any]:
-        instance = await self._collection.insert_one(data.to_mongo())
+    async def create(self, data) -> Dict[str, Any]:
+        """Create a new document from either a model instance or dictionary."""
+        if hasattr(data, 'to_mongo'):
+            # It's a model instance
+            mongo_data = data.to_mongo()
+        else:
+            # It's a dictionary
+            mongo_data = data
+
+        instance = await self._collection.insert_one(mongo_data)
         result = await self._collection.find_one({"_id": instance.inserted_id})
-        return self.model.from_mongo(result)
+        model_instance = self.model.from_mongo(result)
+
+        if model_instance:
+            return model_instance.model_dump()
+        return None
     
     async def filter(
             self,

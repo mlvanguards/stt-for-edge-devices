@@ -3,12 +3,10 @@ from typing import Any, ClassVar, Dict, List, Optional
 
 from pydantic_settings import BaseSettings
 
-
 class BaseAppSettings(BaseSettings):
     """Base settings class with common configuration."""
 
-    BASE_DIR: ClassVar[Path] = Path(__file__).resolve().parent.parent.parent
-
+    BASE_DIR: ClassVar[Path] = Path(__file__).resolve().parent
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -19,7 +17,10 @@ class APISettings(BaseAppSettings):
     """API-related settings."""
 
     API_VERSION: str = "1.0.0"
-
+    API_TITLE: str = "STT and Chat API with Conversation Memory, TTS, and MongoDB"
+    API_DESCRIPTION: str = '''Speech-to-text transcription, conversation management with GPT models and short-term memory, 
+and text-to-speech synthesis API optimized for edge devices.
+'''
     # CORS settings
     CORS_ALLOW_ORIGINS: List[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True

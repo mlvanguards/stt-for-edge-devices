@@ -4,10 +4,11 @@ import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+import torchaudio
 
 from src.asr.asr_processor import ASRProcessor
 from src.config.settings import settings
-from src.core.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessor
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -129,6 +130,33 @@ class DatasetProcessor:
         except Exception as e:
             logger.error(f"Error saving results: {str(e)}")
 
+    def resample_audio_file(self, audio_file: Path, target_sample_rate: int = 16000,
+                            output_dir: Optional[Path] = None) -> Path:
+        """
+        Resample the given audio file to the target sample rate (default 16kHz)
+        and save the result in an output directory.
+        """
+        if output_dir is None:
+            output_dir = audio_file.parent / "resampled"
+            output_dir.mkdir(exist_ok=True)
+
+        # Load audio without normalizing (so we work with raw waveform)
+        waveform, sample_rate = self.audio_processor.load_audio(audio_file, normalize=False)
+
+        # If the audio is not already 16kHz, resample it
+        if sample_rate != target_sample_rate:
+            waveform, _ = self.audio_processor.resample(waveform, sample_rate, target_sample_rate)
+        else:
+            pass
+
+        # Define the output file path (using the same file name)
+        output_path = output_dir / audio_file.name
+
+        # Save the resampled waveform as a WAV file
+        torchaudio.save(str(output_path), waveform, target_sample_rate)
+
+        return output_path
+
     def process_dataset(
         self,
         input_dir: str,
@@ -176,7 +204,11 @@ class DatasetProcessor:
         # Process files in batches
         total_files = len(files_to_process)
         for i, audio_file in enumerate(files_to_process):
-            result = self.asr_processor.process_audio_file(audio_file)
+            # Resample the audio file to 16kHz and get the new file path
+            resampled_file = self.resample_audio_file(audio_file, target_sample_rate=16000)
+
+            # Now process the resampled file for transcription
+            result = self.asr_processor.process_audio_file(resampled_file)
             results.append(result)
 
             # Log progress

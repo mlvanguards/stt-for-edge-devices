@@ -16,15 +16,19 @@ class BaseModel(_BaseModel):
 
     @classmethod
     def from_mongo(cls, data: dict):
-        """Convert "_id" (str object) into "id" (UUID object)."""
+        """Convert MongoDB document to Pydantic model."""
         if not data:
-            return data
+            return None
 
-        id = data.pop("_id", None)
-        return cls(**dict(data, id=id))
+        mongo_id = data.pop("_id", None)
+
+        if "id" not in data:
+            data["id"] = uuid.uuid4()
+
+        return cls(**data)
 
     def to_mongo(self, **kwargs) -> dict:
-        """Convert "id" (UUID object) into "_id" (str object)."""
+        """Convert model to MongoDB document format."""
         exclude_unset = kwargs.pop("exclude_unset", False)
         by_alias = kwargs.pop("by_alias", True)
 
@@ -32,8 +36,11 @@ class BaseModel(_BaseModel):
             exclude_unset=exclude_unset, by_alias=by_alias, **kwargs
         )
 
-        if "_id" not in parsed and "id" in parsed:
-            parsed["_id"] = parsed.pop("id")
+        # Store conversation_id as the primary key instead of id
+        if "conversation_id" in parsed:
+            parsed["_id"] = parsed["conversation_id"]
+        elif "_id" not in parsed and "id" in parsed:
+            parsed["_id"] = str(parsed.pop("id"))
 
         return parsed
 
