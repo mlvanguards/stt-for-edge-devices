@@ -12,14 +12,14 @@ from src.services.conversation import ConversationService
 from src.services.memory import MemoryService
 from src.services.recognition import SpeechRecognitionService
 from src.services.tts import TextToSpeechService
-from src.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessorMainApp
 
 async def get_db():
     db = await mongo_manager.get_db()
     return db
 
 async def get_audio_processor():
-    return AudioProcessor()
+    return AudioProcessorMainApp()
 
 def get_huggingface_client():
     return HuggingFaceGatewayClient()

@@ -6,7 +6,7 @@ from bson.objectid import ObjectId
 from bson.binary import Binary
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from src.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessorMainApp
 from src.repositories.base import BaseRepository
 from src.models.base import BaseModel
 
@@ -20,8 +20,8 @@ class AudioModel(BaseModel):
 class AudioRepository(BaseRepository):
     model = AudioModel
 
-    def __init__(self, db, audio_processor: Optional[AudioProcessor] = None):
-        self.audio_processor = audio_processor or AudioProcessor()
+    def __init__(self, db, audio_processor: Optional[AudioProcessorMainApp] = None):
+        self.audio_processor = audio_processor or AudioProcessorMainApp()
         super().__init__(db)
 
     async def _get_collection(self) -> AsyncIOMotorCollection:

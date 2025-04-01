@@ -7,8 +7,10 @@ router = APIRouter(prefix="/v1")
 from .chat import router as chat_router
 from .conversations import router as conversations_router
 from .tts import router as tts_router
+from .models import router as models_router
 
 # Include all routers
 router.include_router(chat_router)
 router.include_router(conversations_router)
 router.include_router(tts_router)
+router.include_router(models_router)

@@ -4,7 +4,7 @@ from src.utils.data.data_normalizer import DataNormalizer
 from src.utils.data.data_splitter import DataSplitter
 from src.utils.data.dataset_creator import DatasetCreator
 from src.config.settings import settings
-from src.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_process import AudioProcessor
 from src.asr.dataset_processor import DatasetProcessor
 
 

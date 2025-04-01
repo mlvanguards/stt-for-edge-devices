@@ -3,14 +3,14 @@ import base64
 import asyncio
 from typing import Dict, Optional, Any, Tuple
 from src.config.settings import settings
-from src.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_handling import AudioProcessorMainApp
 logger = logging.getLogger(__name__)
 
 class TextToSpeechService:
-    def __init__(self, external_api_client, audio_repository, audio_processor: Optional[AudioProcessor] = None):
+    def __init__(self, external_api_client, audio_repository, audio_processor: Optional[AudioProcessorMainApp] = None):
         self.external_api_client = external_api_client
         self.audio_repository = audio_repository
-        self.audio_processor = audio_processor or AudioProcessor()
+        self.audio_processor = audio_processor or AudioProcessorMainApp()
         self.default_voice_id = settings.tts.DEFAULT_VOICE_ID
         self.tts_model_id = settings.tts.TTS_MODEL_ID
         self.voice_cache = None

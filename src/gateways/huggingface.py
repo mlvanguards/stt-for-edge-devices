@@ -179,8 +179,8 @@ class HuggingFaceGatewayClient:
         # Create silent audio if not provided
         if audio_content is None:
             # Create a simple silent audio bytes object
-            from src.utils.audio.audio_handling import AudioProcessor
-            audio_processor = AudioProcessor()
+            from src.utils.audio.audio_handling import AudioProcessorMainApp
+            audio_processor = AudioProcessorMainApp()
             audio_content = audio_processor.create_silent_audio(duration=0.5)
 
         logger.info(f"Warming up Hugging Face Inference API for model: {_model_id}")

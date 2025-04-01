@@ -21,6 +21,10 @@ class DatabaseConnectionManager:
         self._client: Optional[AsyncIOMotorClient] = None
 
     async def get_db(self) -> AsyncIOMotorDatabase:
+        # Check if client is None or not connected, reinitialize if needed
+        if self._client is None or not await self.connected():
+            logger.info("MongoDB client is closed or None, reinitializing...")
+            self.init()
         return self._client[settings.db.MONGODB_DB]
 
     def init(self):
@@ -43,10 +47,12 @@ class DatabaseConnectionManager:
 
     async def connected(self):
         try:
-            self._client.admin.command('ping')
+            if self._client:
+                await self._client.admin.command('ping')
+                return True
         except Exception:
             return False
-        return True
+        return False
 
 
 manager = DatabaseConnectionManager()

@@ -8,7 +8,7 @@ import torchaudio
 
 from src.asr.asr_processor import ASRProcessor
 from src.config.settings import settings
-from src.utils.audio.audio_handling import AudioProcessor
+from src.utils.audio.audio_process import AudioProcessor
 
 # Configure logging
 logger = logging.getLogger(__name__)
