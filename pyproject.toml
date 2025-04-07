@@ -7,7 +7,6 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-speechbrain = "^1.0.2"
 torchaudio = "^2.5.1"
 soundfile = "^0.12.1"
 torch = "^2.5.1"
@@ -18,7 +17,6 @@ datasets = "^3.2.0"
 jiwer = "^3.0.5"
 python-dotenv = "^1.0.1"
 huggingface-hub = "^0.27.1"
-kagglehub = "^0.3.9"
 uvicorn = "^0.34.0"
 fastapi = "^0.115.8"
 matplotlib = "^3.10.1"
@@ -30,6 +28,9 @@ pydub = "^0.25.1"
 gitingest = "^0.1.4"
 prettytable = "^3.15.1"
 pydantic-settings = "^2.8.1"
+speechbrain = "^1.0.2"
+requests-toolbelt = "^1.0.0"
+kagglehub = "^0.3.10"
 
 
 [build-system]

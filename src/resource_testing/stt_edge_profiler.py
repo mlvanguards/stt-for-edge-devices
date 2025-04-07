@@ -4,29 +4,39 @@ import psutil
 import threading
 import numpy as np
 import torch
-import torchaudio
 import pandas as pd
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 from datetime import datetime
+from typing import Dict, Tuple, Optional, Any
 
 from src.config.settings import settings
+from src.utils.audio.audio_process import AudioProcessor
 
 
 class STTEdgeProfiler:
-    def __init__(self, model_name, sampling_interval=None):
+    """
+    Edge device profiler for speech-to-text models.
+    Measures performance metrics like CPU usage, memory usage, and inference time.
+    Uses the centralized AudioProcessor for all audio operations.
+    """
+
+    def __init__(self, model_name: str, sampling_interval: Optional[float] = None,
+                 audio_processor: Optional[AudioProcessor] = None):
         """
         Initialize the profiler for a Wav2Vec2 Speech-to-Text model with edge performance focus.
 
         Args:
-            model_name (str): Huggingface STT model name (e.g., 'StefanStefan/Wav2Vec-100-CSR-12M')
-            sampling_interval (float): How often to sample resource usage (seconds)
+            model_name: Huggingface STT model name (e.g., 'StefanStefan/Wav2Vec-100-CSR-12M')
+            sampling_interval: How often to sample resource usage (seconds)
+            audio_processor: Optional audio processor instance
         """
         self.model_name = model_name
         # Use settings value if not provided
-        self.sampling_interval = sampling_interval or settings.TESTING_SAMPLING_INTERVAL
+        self.sampling_interval = sampling_interval or settings.testing.TESTING_SAMPLING_INTERVAL
         self.metrics = []
         self.monitoring = False
         self.process = psutil.Process(os.getpid())
+        self.audio_processor = audio_processor or AudioProcessor()
 
         # Check if running on battery (only works on laptops)
         self.battery_available = hasattr(psutil, "sensors_battery") and psutil.sensors_battery() is not None
@@ -39,7 +49,7 @@ class STTEdgeProfiler:
             self.device = "mps"  # Apple Silicon GPU
             print("Using Apple Silicon MPS")
         else:
-            self.device = settings.TESTING_DEFAULT_DEVICE
+            self.device = settings.testing.TESTING_DEFAULT_DEVICE
             print(f"Using {self.device}")
 
         print(f"Loading STT model {model_name} on {self.device}...")
@@ -51,7 +61,7 @@ class STTEdgeProfiler:
             print(f"Error loading model: {e}")
             raise
 
-    def _monitor_resources(self):
+    def _monitor_resources(self) -> None:
         """Background thread to monitor resource usage"""
         while self.monitoring:
             cpu_percent = self.process.cpu_percent()
@@ -90,8 +100,13 @@ class STTEdgeProfiler:
 
             time.sleep(self.sampling_interval)
 
-    def start_monitoring(self):
-        """Start the resource monitoring thread"""
+    def start_monitoring(self) -> 'STTEdgeProfiler':
+        """
+        Start the resource monitoring thread.
+
+        Returns:
+            Self for method chaining
+        """
         self.monitoring = True
         self.metrics.clear()
         self.monitor_thread = threading.Thread(target=self._monitor_resources)
@@ -99,47 +114,41 @@ class STTEdgeProfiler:
         self.monitor_thread.start()
         return self
 
-    def stop_monitoring(self):
-        """Stop the resource monitoring thread"""
+    def stop_monitoring(self) -> 'STTEdgeProfiler':
+        """
+        Stop the resource monitoring thread.
+
+        Returns:
+            Self for method chaining
+        """
         self.monitoring = False
         if hasattr(self, 'monitor_thread'):
             self.monitor_thread.join(timeout=1.0)
         return self
 
-    def run_inference(self, audio_path, num_repeats=None, stream_simulation=False):
+    def run_inference(self, audio_path: str, num_repeats: Optional[int] = None, stream_simulation: bool = False) -> \
+    Tuple[Dict, pd.DataFrame, str]:
         """
-        Run STT inference on the given audio file and monitor resource usage
+        Run STT inference on the given audio file and monitor resource usage.
 
         Args:
-            audio_path (str): Path to audio file
-            num_repeats (int): Number of times to repeat inference for better measurements
-            stream_simulation (bool): Simulate streaming by processing chunks
+            audio_path: Path to audio file
+            num_repeats: Number of times to repeat inference for better measurements
+            stream_simulation: Simulate streaming by processing chunks
 
         Returns:
-            dict: Summary statistics of resource usage
-            DataFrame: Detailed metrics over time
-            str: Transcribed text
+            Tuple of (summary statistics, detailed metrics DataFrame, transcribed text)
         """
         # Use settings value if not provided
-        num_repeats = num_repeats or settings.TESTING_DEFAULT_NUM_REPEATS
+        num_repeats = num_repeats or settings.testing.TESTING_DEFAULT_NUM_REPEATS
 
-        # Load and preprocess audio using torchaudio
+        # Load and preprocess audio using AudioProcessor
         print(f"Loading audio file: {audio_path}")
-        waveform, sampling_rate = torchaudio.load(audio_path)
-
-        # Resample to 16kHz if needed (most STT models expect 16kHz)
-        if sampling_rate != settings.AUDIO_SAMPLE_RATE:
-            resampler = torchaudio.transforms.Resample(orig_freq=sampling_rate, new_freq=settings.AUDIO_SAMPLE_RATE)
-            waveform = resampler(waveform)
-            sampling_rate = settings.AUDIO_SAMPLE_RATE
-
-        # Convert to mono if stereo
-        if waveform.shape[0] > settings.AUDIO_CHANNELS:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
+        waveform, sample_rate = self.audio_processor.load_audio(audio_path)
 
         # Convert to numpy for compatibility with transformers
         audio_array = waveform.squeeze().numpy()
-        audio_length_seconds = len(audio_array) / sampling_rate
+        audio_length_seconds = len(audio_array) / sample_rate
         print(f"Audio length: {audio_length_seconds:.2f} seconds")
 
         # Start monitoring
@@ -153,7 +162,7 @@ class STTEdgeProfiler:
             # Simulate streaming by processing chunks (if requested)
             if stream_simulation and audio_length_seconds > 3.0:
                 print("Simulating streaming audio processing...")
-                chunk_size = int(1.0 * sampling_rate)  # 1 second chunks
+                chunk_size = int(1.0 * sample_rate)  # 1 second chunks
                 chunk_results = []
 
                 for i in range(num_repeats):
@@ -169,7 +178,7 @@ class STTEdgeProfiler:
                         chunk = audio_array[start_idx:end_idx]
 
                         # Process chunk - modified for Wav2Vec2
-                        chunk_inputs = self.processor(chunk, sampling_rate=settings.AUDIO_SAMPLE_RATE,
+                        chunk_inputs = self.processor(chunk, sampling_rate=settings.audio.AUDIO_SAMPLE_RATE,
                                                       return_tensors="pt")
                         chunk_inputs = {k: v.to(self.device) for k, v in chunk_inputs.items()}
 
@@ -208,7 +217,8 @@ class STTEdgeProfiler:
                         torch.cuda.empty_cache() if self.device == "cuda" else None
 
                     # Prepare inputs for Wav2Vec2
-                    inputs = self.processor(audio_array, sampling_rate=settings.AUDIO_SAMPLE_RATE, return_tensors="pt")
+                    inputs = self.processor(audio_array, sampling_rate=settings.audio.AUDIO_SAMPLE_RATE,
+                                            return_tensors="pt")
                     inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
                     # Measure inference time
@@ -284,7 +294,7 @@ class STTEdgeProfiler:
         edge_score = 10.0
 
         # Penalize for high memory usage
-        memory_threshold = settings.TESTING_EDGE_MEMORY_THRESHOLD_MB
+        memory_threshold = settings.testing.TESTING_EDGE_MEMORY_THRESHOLD_MB
         if summary['max_memory_mb'] > memory_threshold:
             edge_score -= min(5, (summary['max_memory_mb'] - memory_threshold) / 1000)
 
@@ -293,7 +303,7 @@ class STTEdgeProfiler:
             edge_score -= min(5, (summary['realtime_factor'] - 1.0) * 5)
 
         # Penalize for high CPU usage
-        cpu_threshold = settings.TESTING_EDGE_CPU_THRESHOLD_PERCENT
+        cpu_threshold = settings.testing.TESTING_EDGE_CPU_THRESHOLD_PERCENT
         if summary['avg_cpu_percent'] > cpu_threshold:
             edge_score -= min(3, (summary['avg_cpu_percent'] - cpu_threshold) / 20)
 
@@ -303,8 +313,25 @@ class STTEdgeProfiler:
 
         return summary, df, transcription
 
-    def save_results(self, summary, df, audio_path, transcription=None, output_dir="./stt_profiling_results"):
-        """Save the profiling results"""
+    def save_results(self,
+                     summary: Dict[str, Any],
+                     df: pd.DataFrame,
+                     audio_path: str,
+                     transcription: Optional[str] = None,
+                     output_dir: str = "./stt_profiling_results") -> Tuple[str, str]:
+        """
+        Save the profiling results.
+
+        Args:
+            summary: Summary metrics dictionary
+            df: DataFrame with detailed metrics
+            audio_path: Path to the audio file used
+            transcription: Optional transcription text
+            output_dir: Directory to save results
+
+        Returns:
+            Tuple of (summary_file_path, details_file_path)
+        """
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
 
@@ -331,8 +358,16 @@ class STTEdgeProfiler:
         print(f"Results saved to {summary_file} and {details_file}")
         return summary_file, details_file
 
-    def visualize_results(self, df, summary, output_dir="./stt_profiling_results"):
-        """Generate visualization of resource usage"""
+    def visualize_results(self, df: pd.DataFrame, summary: Dict[str, Any],
+                          output_dir: str = "./stt_profiling_results") -> None:
+        """
+        Generate visualization of resource usage.
+
+        Args:
+            df: DataFrame with detailed metrics
+            summary: Summary metrics dictionary
+            output_dir: Directory to save visualizations
+        """
         try:
             import matplotlib.pyplot as plt
 
@@ -351,7 +386,7 @@ class STTEdgeProfiler:
             # Plot CPU usage
             plt.subplot(4, 1, 1)
             plt.plot(range(len(df)), df['cpu_percent'], label='CPU %', color='green')
-            plt.axhline(y=settings.TESTING_EDGE_CPU_THRESHOLD_PERCENT, color='r', linestyle='--', alpha=0.3,
+            plt.axhline(y=settings.testing.TESTING_EDGE_CPU_THRESHOLD_PERCENT, color='r', linestyle='--', alpha=0.3,
                         label='Edge device threshold')
             plt.title(f'CPU Usage - {self.model_name}')
             plt.ylabel('CPU %')
@@ -361,7 +396,7 @@ class STTEdgeProfiler:
             # Plot Memory usage
             plt.subplot(4, 1, 2)
             plt.plot(range(len(df)), df['memory_rss_mb'], label='Memory (MB)', color='blue')
-            plt.axhline(y=settings.TESTING_EDGE_MEMORY_THRESHOLD_MB, color='r', linestyle='--', alpha=0.3,
+            plt.axhline(y=settings.testing.TESTING_EDGE_MEMORY_THRESHOLD_MB, color='r', linestyle='--', alpha=0.3,
                         label='2GB Edge threshold')
             plt.title('Memory Usage')
             plt.ylabel('Memory (MB)')

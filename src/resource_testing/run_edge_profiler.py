@@ -1,11 +1,13 @@
 import os
-import torch
-import torchaudio
 from src.resource_testing.stt_edge_profiler import STTEdgeProfiler
 from src.config.settings import settings
+from src.utils.audio.audio_process import AudioProcessor
+
+# Create centralized audio processor
+audio_processor = AudioProcessor()
 
 # Model to test
-MODEL_NAME = "StefanStefan/Wav2Vec-100-CSR-12M"
+MODEL_NAME = "StefanStefan/Wav2Vec-100-CSR-KD"
 
 # Create a test directory
 os.makedirs("edge_test_results", exist_ok=True)
@@ -20,21 +22,14 @@ if not os.path.exists(AUDIO_PATH):
 
     test_path = "test_audio.wav"
     print(f"Creating test audio file: {test_path}")
-    sample_rate = settings.AUDIO_SAMPLE_RATE
-    duration = 10  # seconds
 
-    # Generate a simple wave pattern with spoken-word-like characteristics
-    t = torch.linspace(0, duration, int(sample_rate * duration))
+    # Create silent audio using audio processor
+    silent_audio = audio_processor.create_silent_audio(duration=10)
 
-    # Mix several frequencies to simulate speech
-    waveform = (
-            0.3 * torch.sin(2 * 3.14159 * 150 * t) +  # Base tone
-            0.2 * torch.sin(2 * 3.14159 * 450 * t) +  # Higher frequency
-            0.1 * torch.sin(2 * 3.14159 * 1200 * t) +  # Consonant-like
-            0.05 * torch.randn(t.shape)  # Noise
-    ).unsqueeze(0)
+    # Save the test file
+    with open(test_path, "wb") as f:
+        f.write(silent_audio)
 
-    torchaudio.save(test_path, waveform, sample_rate)
     print(f"Test audio file created: {test_path}")
     AUDIO_PATH = test_path
 
@@ -43,17 +38,18 @@ print(f"Profiling {MODEL_NAME}...")
 print("This will measure CPU, memory, and battery usage during transcription")
 
 try:
-    # Initialize profiler
+    # Initialize profiler with our audio processor
     profiler = STTEdgeProfiler(
         model_name=MODEL_NAME,
-        sampling_interval=settings.TESTING_SAMPLING_INTERVAL
+        sampling_interval=settings.testing.TESTING_SAMPLING_INTERVAL,
+        audio_processor=audio_processor
     )
 
     # Run basic test first (whole audio file)
     print("\n==== Running basic inference test ====")
     summary1, metrics1, transcript1 = profiler.run_inference(
         AUDIO_PATH,
-        num_repeats=settings.TESTING_DEFAULT_NUM_REPEATS,
+        num_repeats=settings.testing.TESTING_DEFAULT_NUM_REPEATS,
         stream_simulation=False
     )
 
@@ -70,7 +66,7 @@ try:
     print("\n==== Running streaming simulation test ====")
     summary2, metrics2, transcript2 = profiler.run_inference(
         AUDIO_PATH,
-        num_repeats=settings.TESTING_DEFAULT_NUM_REPEATS,
+        num_repeats=settings.testing.TESTING_DEFAULT_NUM_REPEATS,
         stream_simulation=True
     )
 
